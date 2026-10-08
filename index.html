@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1e302c" />
+    <meta name="description" content="Drivers Ed. A first-person driving sandbox. Take a quiet drive around the neighborhood." />
+    <title>Drivers Ed — Neighborhood sandbox</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="world" aria-label="First-person driving simulator showing a suburban neighborhood"></canvas>
+      <header class="topbar">
+        <div class="identity"><span class="brand-mark" aria-hidden="true">d<span>e</span></span><div><h1>Drivers Ed<span class="brand-dot">.</span></h1><p>A little room to learn.</p></div></div>
+        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 01</span></div>
+      </header>
+      <section class="location" aria-label="Current environment"><span class="eyebrow">THE NEIGHBORHOOD</span><h2>Take the long way.</h2><p>A quiet block. An open road. Your own pace.</p></section>
+      <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="320" aria-label="Map showing the car and rectangular streets"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
+      <div id="notice" role="status"></div>
+      <footer class="bottom-panel">
+        <div class="drive-status"><span class="live-dot"></span><span id="drive-status">READY WHEN YOU ARE</span></div>
+        <div class="controls" aria-label="Driving controls"><span><kbd>W</kbd><kbd>↑</kbd> Forward</span><span><kbd>S</kbd><kbd>↓</kbd> Brake / reverse</span><span><kbd>A</kbd><kbd>D</kbd><span class="arrow-keys"><kbd>←</kbd><kbd>→</kbd></span> Steer</span><button id="reset" type="button" title="Return to the starting position (R)"><span aria-hidden="true">↺</span> Reset <kbd>R</kbd></button></div>
+        <div class="build-label">EXPLORATION, AT YOUR PACE.</div>
+      </footer>
+      <div class="instrument" aria-label="Vehicle instruments"><span id="gear">N</span><div><span id="speed">0</span><span class="speed-unit">MPH</span></div><span class="automatic">AUTO</span></div>
+      <div class="touch-controls" aria-label="Touch driving controls"><div><button data-drive="left" aria-label="Steer left">←</button><button data-drive="right" aria-label="Steer right">→</button></div><div><button data-drive="reverse" aria-label="Brake or reverse">↓</button><button data-drive="forward" aria-label="Drive forward">↑</button></div></div>
+      <div id="error" role="alert" hidden><h2>Unable to start the simulator</h2><p id="error-message"></p></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
