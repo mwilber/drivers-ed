@@ -32,11 +32,11 @@ test('steering turns left forward and changes yaw direction in reverse', () => {
 test('limits road and grass speed and opposing inputs brake', () => {
   const road = createCar();
   const grass = createCar();
-  drive(road, { forward: true }, 20);
+  drive(road, { forward: true }, 180);
   drive(grass, { forward: true }, 20, [], false);
-  assert.equal(road.speed, 18);
-  assert.equal(grass.speed, 7);
-  drive(road, { forward: true, reverse: true }, 4);
+  assert.ok(road.speed * 2.236936 >= 110 && road.speed * 2.236936 <= 115, 'sedan reaches its highway top-speed range');
+  assert.ok(grass.speed > 6 && grass.speed <= 7, 'grass resistance reduces the equilibrium speed');
+  drive(road, { forward: true, reverse: true }, 8);
   assert.equal(road.speed, 0);
 });
 

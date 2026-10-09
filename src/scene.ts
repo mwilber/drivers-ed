@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { CAR, type CarState } from './simulation.ts';
+import type { CarState } from './simulation.ts';
+import { CAR } from './vehicle-config.ts';
 import { HOUSES, ROADS, TREES } from './world-layout.ts';
 
 const materials = new Map<number, THREE.MeshStandardMaterial>();

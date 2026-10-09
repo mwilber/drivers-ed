@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 1 is a deliberately simple foundation for a realistic simulator, with placeholder geometry and a lightweight driving model.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 2 adds tuned flat-road handling and an automatic drivetrain to the original placeholder neighborhood and sedan.
 
 ## Run locally
 
@@ -17,6 +17,7 @@ Open the local URL printed by Vite (normally http://127.0.0.1:5173).
 npm run build   # Type-check and create a production build in dist/
 npm run preview # Serve the production build locally
 npm test        # Driving and world-layout tests using Node's built-in runner
+npm run handling:check # Repeatable flat-road handling measurements
 ```
 
 Use a browser with WebGL 2 and hardware acceleration enabled. All scenery is generated locally; the game loads no external models, textures, or fonts.
@@ -30,27 +31,56 @@ Use a browser with WebGL 2 and hardware acceleration enabled. All scenery is gen
 | A / Left, D / Right | Steer |
 | R / Reset button | Return to the starting position |
 
-Releasing steering centers the wheel. Releasing the accelerator lets the car coast down. Holding both direction keys brakes. Direction selection is automatic, with D/R/N shown on the speed display; there are no manual gears. Touch devices get steering and direction buttons. Switching away from the page clears input and pauses motion.
+Releasing steering centers the wheel. Releasing the accelerator lets the car coast down with engine braking. Holding both direction keys brakes and holds the car at a stop. Holding the opposite direction first brakes to a complete stop, then engages that direction after a short stationary delay; releasing it cancels the pending change. Direction selection and forward shifts are automatic, with D1/D2/D3…/R/N shown on the speed display; there are no manual gears. The display retains the selected gear when stopped. Touch devices get steering and direction buttons. Switching away from the page clears input and pauses motion.
 
 ## Phase 1
 
 - A generic, unstyled sedan with a fixed driver's-seat camera, a plain dashboard, and a steering wheel.
 - A 200 × 120 metre rectangular road loop, with a central street connecting the two longer sides. Streets are 10 metres wide.
 - Placeholder houses, trees, sidewalks, lawns, and a visible hedge boundary.
-- Forward/reverse acceleration, braking before direction changes, speed-sensitive steering, and drag. Road speed is capped at about 40 mph; grass and reverse are slower.
+- Forward/reverse acceleration, braking before direction changes, steering, and drag. Phase 2 refines this handling and raises the forward speed limit; grass and reverse remain slower.
 - A sedan-sized collision footprint against houses, tree trunks, and the outer boundary.
 - A small live map, speed and direction display, and reset control.
 
-The current physics use a fixed 120 Hz planar bicycle model. Suspension, tire slip, drivetrain ratios, damage, traffic, pedestrians, objectives, audio, and detailed vehicle art are future phases and are not implemented.
+## Phase 2 — Implemented handling
+
+The reference vehicle is a fictional 1,500 kg sedan, 4.5 m long and 1.8 m wide, with a 2.7 m wheelbase and 0.31 m tire radius. These are authored tuning values, not specifications or measured validation for a real car. Vehicle configuration is independent of the renderer.
+
+- Progressive throttle and brake response, engine torque, rolling resistance, aerodynamic drag, and engine braking.
+- Six available automatic forward ratios and a reverse ratio, with shift hysteresis, brief power interruptions during shifts, and first-gear selection for launch. Sustained high-speed driving uses all six forward ratios.
+- A complete-stop interlock and 0.35-second selection delay when changing direction, followed by brake release and throttle buildup. There is no automatic creep with this simplified control scheme.
+- Rate-limited steering with a short yaw response time. Full steering lock stays available at every speed and remains held while a direction key is down. Speed reduces how quickly steering builds, rather than unwinding the held wheel; releasing the key centers it.
+- An aggregate tire-grip budget shared between longitudinal and lateral acceleration: hard braking reduces available cornering force, and excessive steering demand widens the turn.
+- A 115 mph forward governor, with a measured sustained speed around 112.5 mph after drag and rolling resistance. Reverse remains limited to about 11 mph, with slower driving and greater resistance on grass.
+
+Repeatable checks run on an obstacle-free flat test pad in code, without adding a new area to the playable world. The current neighborhood's short streets do not provide room for a full top-speed run. The stopping test starts applying the brakes at 30 mph and excludes human reaction time. The turning measurement follows the car's center path at approximately 1 m/s, rather than measuring an outer-wheel or body turning circle. Full steering lock does not guarantee a tight turn at speed: the tire-grip limit still widens the trajectory.
+
+| Check | Acceptance target | Current measurement |
+| --- | --- | --- |
+| 0–30 mph acceleration | 5–7 s | 5.32 s |
+| 30–0 mph stopping distance | 12–17 m | 12.37 m |
+| 30–0 mph stopping time | 1.5–2.2 s | 1.77 s |
+| Speed after 5 s coasting from 30 mph | 22–26 mph | 23.52 mph |
+| Low-speed full-lock center-path radius | 4.7–5.3 m | 4.94 m |
+| Sustained speed after 180 s at full throttle | 110–115 mph | 112.46 mph |
+| Same timed maneuver at 30/60/144 Hz and uneven frame times | Identical simulation steps and resulting state | Pass |
+
+Run `npm run handling:check` to reproduce the measurements and `npm test` to check their acceptance bounds, held-steering behavior, direction transitions, transmission behavior, grip limits, braking and obstacle collisions from 115 mph, collision recovery, and frame-rate consistency.
+
+The simulation remains a fixed 120 Hz planar bicycle model. Grip saturation limits turning authority; it does not model individual tire slip, sideways skids, or spinouts. Collision handling still stops the car at obstacles. Suspension, weight transfer, richer collision response, damage, traffic, pedestrians, objectives, audio, and detailed vehicle art remain future work.
 
 ## Structure
 
 - `src/simulation.ts`: Renderer-independent vehicle state, input, movement, and collision detection, in metres/seconds/radians.
+- `src/vehicle-config.ts`: Sedan dimensions, mass, engine torque curve, transmission ratios, and handling targets.
+- `src/simulation-clock.ts`: Fixed-step accumulator shared by the browser and frame-rate regression checks.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
 - `src/main.ts`: Input handling, fixed-step loop, instruments, and map.
 - `src/style.css`: Responsive interface and touch controls.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
+- `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
+- `scripts/handling-scenarios.mjs`: Repeatable flat-road maneuvers used by tests and `npm run handling:check`.
 
 Three.js, TypeScript, and Vite were approved for this phase; `@types/three` supplies Three.js's TypeScript definitions. Ask the project owner before adding any other third-party libraries. Keep subsequent work within the phase explicitly requested.
 
@@ -60,7 +90,7 @@ This is a proposed sequence after Phase 1, not authorization to implement later 
 
 Each phase should deliver a small playable increment. Agree on measurable acceptance criteria at its start, test the new behavior in isolation, and then check it in the existing neighborhood. Keep earlier driving checks passing and resolve significant regressions before moving on. Use repeatable starting positions and input sequences to make behavior changes easy to compare.
 
-### Phase 2 — Core vehicle handling
+### Phase 2 — Core vehicle handling (completed)
 
 **Focus:** Make driving on a flat, dry road believable before introducing more complex terrain or other road users.
 

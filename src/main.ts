@@ -1,6 +1,7 @@
 import './style.css';
 import { createScene } from './scene.ts';
-import { createCar, stepCar, type DrivingInput } from './simulation.ts';
+import { createCar, stepCar, stopCar, type DrivingInput } from './simulation.ts';
+import { SimulationClock } from './simulation-clock.ts';
 import { HOUSES, isOnRoad, OBSTACLES, ROADS, TREES } from './world-layout.ts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
@@ -11,6 +12,7 @@ const notice = document.querySelector<HTMLElement>('#notice')!;
 const map = document.querySelector<HTMLCanvasElement>('#map')!;
 const context = map.getContext('2d')!;
 const car = createCar();
+const clock = new SimulationClock();
 const keys = new Set<string>();
 const touches = new Map<number, keyof DrivingInput>();
 const bindings: Record<string, keyof DrivingInput> = {
@@ -31,6 +33,7 @@ function clearInput() {
 }
 function reset() {
   Object.assign(car, createCar());
+  clock.reset();
   clearInput();
   showNotice('Back at the start. Take your time.');
 }
@@ -48,7 +51,7 @@ window.addEventListener('blur', clearInput);
 document.addEventListener('visibilitychange', () => {
   clearInput();
   // Freeze the car when the page is hidden; returning never causes a jump.
-  if (document.hidden) car.speed = 0;
+  if (document.hidden) { stopCar(car); clock.reset(); }
 });
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-drive]')) {
   button.addEventListener('pointerdown', event => {
@@ -101,7 +104,6 @@ function showError(message: string) {
 try {
   const scene = createScene(canvas);
   let lastTime = performance.now();
-  let accumulator = 0;
   let lostContext = false;
   canvas.addEventListener('webglcontextlost', event => {
     event.preventDefault();
@@ -109,22 +111,17 @@ try {
     clearInput();
     showError('The graphics connection was interrupted. Reload this page to restart.');
   });
-  const fixedStep = 1 / 120;
   function frame(time: number) {
     requestAnimationFrame(frame);
     const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
-    if (document.hidden || lostContext) { accumulator = 0; return; }
+    if (document.hidden || lostContext) { clock.reset(); return; }
     const input: DrivingInput = { forward: false, reverse: false, left: false, right: false };
     for (const key of keys) if (bindings[key]) input[bindings[key]] = true;
     for (const control of touches.values()) input[control] = true;
-    accumulator += dt;
-    while (accumulator >= fixedStep) {
-      stepCar(car, input, fixedStep, OBSTACLES, isOnRoad(car.x, car.z));
-      accumulator -= fixedStep;
-    }
+    clock.advance(dt, step => stepCar(car, input, step, OBSTACLES, isOnRoad(car.x, car.z)));
     speed.textContent = String(Math.round(Math.abs(car.speed) * 2.236936));
-    gear.textContent = car.speed < -0.05 ? 'R' : car.speed > 0.05 ? 'D' : 'N';
+    gear.textContent = car.gear < 0 ? 'R' : car.gear > 0 ? `D${car.gear}` : 'N';
     status.textContent = Math.abs(car.speed) < 0.05 ? 'READY WHEN YOU ARE' : !isOnRoad(car.x, car.z) ? 'OFF THE BEATEN PATH' : car.speed < 0 ? 'TAKING A STEP BACK' : 'A LITTLE FURTHER FROM HURRY';
     scene.render(car);
     drawMap();

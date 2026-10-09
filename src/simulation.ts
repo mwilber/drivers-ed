@@ -1,3 +1,8 @@
+import { CAR, HANDLING, TRANSMISSION } from './vehicle-config.ts';
+
+export { CAR } from './vehicle-config.ts';
+type Direction = -1 | 0 | 1;
+
 /** Metres, seconds, radians. Heading zero points down the negative Z axis. */
 export interface CarState {
   x: number;
@@ -5,6 +10,18 @@ export interface CarState {
   heading: number;
   speed: number;
   steering: number;
+  /** -1 = reverse, 0 = neutral, 1–6 = automatic forward ratios. */
+  gear: number;
+  engineRpm: number;
+  throttle: number;
+  brake: number;
+  shiftRemaining: number;
+  shiftCooldown: number;
+  pendingDirection: Direction;
+  directionWait: number;
+  yawRate: number;
+  acceleration: number;
+  lateralAcceleration: number;
 }
 
 export interface DrivingInput {
@@ -21,41 +38,165 @@ export interface Obstacle {
   halfDepth: number;
 }
 
-export const CAR = { width: 1.8, length: 4.5, wheelbase: 2.7, eyeHeight: 1.22 };
-export const START: Readonly<CarState> = { x: 2.5, z: 48, heading: 0, speed: 0, steering: 0 };
+export const START: Readonly<CarState> = {
+  x: 2.5, z: 48, heading: 0, speed: 0, steering: 0,
+  gear: 0, engineRpm: TRANSMISSION.idleRpm, throttle: 0, brake: 0,
+  shiftRemaining: 0, shiftCooldown: 0, pendingDirection: 0, directionWait: 0,
+  yawRate: 0, acceleration: 0, lateralAcceleration: 0,
+};
 export const createCar = (): CarState => ({ ...START });
 
 function approach(value: number, target: number, step: number): number {
   return value < target ? Math.min(value + step, target) : Math.max(value - step, target);
 }
 
-/** A planar bicycle model: acceleration, drag, steering angle and reverse steering. */
-export function stepCar(car: CarState, input: DrivingInput, dt: number, obstacles: readonly Obstacle[], onRoad: boolean): void {
-  const direction = Number(input.forward) - Number(input.reverse);
-  const steeringInput = Number(input.left) - Number(input.right);
-  // Reduce steering lock with speed to keep keyboard inputs manageable.
-  const steeringLimit = 0.53 / (1 + Math.abs(car.speed) * 0.065);
-  car.steering = approach(car.steering, steeringInput * steeringLimit, dt * 1.15);
-  const braking = (direction !== 0 && direction * car.speed < 0) || (input.forward && input.reverse);
-  if (braking) {
-    car.speed = approach(car.speed, 0, 7.5 * dt);
-  } else if (direction !== 0) {
-    const maxSpeed = direction > 0 ? (onRoad ? 18 : 7) : 5;
-    car.speed = approach(car.speed, direction * maxSpeed, (direction > 0 ? 2.8 : 2) * dt);
-  } else {
-    car.speed = approach(car.speed, 0, (0.35 + car.speed * car.speed * 0.008 + (onRoad ? 0 : 1.3)) * dt);
-  }
+function gearRatio(gear: number): number {
+  return gear < 0 ? TRANSMISSION.reverseRatio : gear > 0 ? TRANSMISSION.forwardRatios[gear - 1]! : 0;
+}
 
-  const heading = car.heading + (car.speed / CAR.wheelbase) * Math.tan(car.steering) * dt;
-  const x = car.x - Math.sin(heading) * car.speed * dt;
-  const z = car.z - Math.cos(heading) * car.speed * dt;
+function wheelRpm(speed: number, gear: number): number {
+  return Math.abs(speed) / (2 * Math.PI * CAR.tireRadius) * 60 * gearRatio(gear) * TRANSMISSION.finalDrive;
+}
+
+function engineTorque(rpm: number): number {
+  const curve = TRANSMISSION.torqueCurve;
+  for (let i = 1; i < curve.length; i++) {
+    const [rpmA, torqueA] = curve[i - 1]!;
+    const [rpmB, torqueB] = curve[i]!;
+    if (rpm <= rpmB) {
+      const fraction = Math.max(0, (rpm - rpmA) / (rpmB - rpmA));
+      return torqueA + (torqueB - torqueA) * fraction;
+    }
+  }
+  return curve[curve.length - 1]![1];
+}
+
+/** Keep the simple W/S interface; a direction change requires a complete stop. */
+function updatePedals(car: CarState, input: DrivingInput, dt: number): void {
+  const requested = (Number(input.forward) - Number(input.reverse)) as Direction;
+  let throttleTarget = 0;
+  let brakeTarget = Number(input.forward && input.reverse);
+  if (requested === 0) {
+    car.directionWait = 0;
+    car.pendingDirection = 0;
+  } else if (car.speed * requested < 0 || requested !== Math.sign(car.gear)) {
+    brakeTarget = 1;
+    if (car.pendingDirection !== requested) car.directionWait = 0;
+    car.pendingDirection = requested;
+    car.directionWait = car.speed === 0 ? car.directionWait + dt : 0;
+    if (car.speed === 0 && (car.gear === 0 || car.directionWait >= TRANSMISSION.directionChangeDelay)) {
+      car.gear = requested;
+      car.directionWait = 0;
+      car.pendingDirection = 0;
+      car.shiftRemaining = 0;
+      car.shiftCooldown = TRANSMISSION.shiftCooldown;
+      brakeTarget = 0;
+      throttleTarget = 1;
+    }
+  } else {
+    car.directionWait = 0;
+    car.pendingDirection = 0;
+    throttleTarget = 1;
+  }
+  // Brake input cuts power immediately; normal throttle release is progressive.
+  car.throttle = brakeTarget ? 0 : approach(car.throttle, throttleTarget,
+    dt * (throttleTarget > car.throttle ? HANDLING.throttleRiseRate : HANDLING.throttleFallRate));
+  car.brake = approach(car.brake, brakeTarget,
+    dt * (brakeTarget > car.brake ? HANDLING.brakeRiseRate : HANDLING.brakeFallRate));
+}
+
+function updateTransmission(car: CarState, dt: number): void {
+  car.shiftRemaining = Math.max(0, car.shiftRemaining - dt);
+  car.shiftCooldown = Math.max(0, car.shiftCooldown - dt);
+  // Select the launch ratio promptly after stopping, even during a shift cooldown.
+  if (car.gear > 1 && Math.abs(car.speed) < 0.5) {
+    car.gear = 1;
+    car.shiftRemaining = 0;
+    car.shiftCooldown = TRANSMISSION.shiftCooldown;
+  }
+  const rpm = wheelRpm(car.speed, car.gear);
+  if (car.gear > 0 && car.shiftCooldown === 0) {
+    let nextGear = car.gear;
+    if (rpm > TRANSMISSION.upshiftRpm && car.gear < TRANSMISSION.forwardRatios.length) nextGear++;
+    else if (rpm < TRANSMISSION.downshiftRpm && car.gear > 1) nextGear--;
+    if (nextGear !== car.gear) {
+      car.gear = nextGear;
+      car.shiftRemaining = TRANSMISSION.shiftDuration;
+      car.shiftCooldown = TRANSMISSION.shiftCooldown;
+    }
+  }
+  // The simplified torque converter permits launch without stalling the engine.
+  const launchRpm = TRANSMISSION.idleRpm + car.throttle * (TRANSMISSION.launchRpm - TRANSMISSION.idleRpm);
+  const targetRpm = Math.min(TRANSMISSION.redlineRpm, Math.max(launchRpm, wheelRpm(car.speed, car.gear)));
+  car.engineRpm += (targetRpm - car.engineRpm) * (1 - Math.exp(-dt / 0.12));
+}
+
+/** Fixed-step planar model with a drivetrain and a shared longitudinal/lateral grip budget. */
+export function stepCar(car: CarState, input: DrivingInput, dt: number, obstacles: readonly Obstacle[], onRoad: boolean): void {
+  updatePedals(car, input, dt);
+  updateTransmission(car, dt);
+  const speedBefore = car.speed;
+  const speedMagnitude = Math.abs(speedBefore);
+  const steeringInput = Number(input.left) - Number(input.right);
+  // Speed changes how quickly keyboard steering builds, never the held angle.
+  // A shrinking angle limit would unwind the wheel while the driver still holds it.
+  const steeringRate = HANDLING.steeringRate / (1 + speedMagnitude / HANDLING.steeringRateSpeedScale);
+  car.steering = approach(car.steering, steeringInput * HANDLING.steeringLock,
+    dt * (steeringInput === 0 ? HANDLING.steeringReturnRate : steeringRate));
+
+  const grip = (onRoad ? HANDLING.dryGrip : HANDLING.grassGrip) * HANDLING.gravity;
+  const speedLimit = car.gear < 0 ? HANDLING.reverseSpeedLimit : onRoad ? HANDLING.forwardSpeedLimit : HANDLING.grassSpeedLimit;
+  const governor = Math.max(0, Math.min(1, (speedLimit - speedMagnitude) / HANDLING.speedGovernorRange));
+  const wheelForce = engineTorque(car.engineRpm) * gearRatio(car.gear) * TRANSMISSION.finalDrive * TRANSMISSION.efficiency / CAR.tireRadius;
+  const driveAcceleration = car.shiftRemaining > 0 || car.brake > 0 ? 0 : car.throttle * wheelForce / CAR.mass * governor;
+  const rolling = (onRoad ? HANDLING.rollingResistance : HANDLING.grassRollingResistance) * HANDLING.gravity;
+  const drag = HANDLING.aerodynamicDrag * speedMagnitude ** 2 / CAR.mass;
+  const engineDrag = car.gear === 0 ? 0 : (HANDLING.engineBraking + HANDLING.engineBrakingPerSpeed * speedMagnitude) * (1 - car.throttle);
+  const resistance = rolling + drag + engineDrag + car.brake * HANDLING.brakeDeceleration;
+  // Resistance cannot push a stopped car backwards; only an engaged gear can launch it.
+  const motionDirection = Math.sign(speedBefore) || Math.sign(car.gear);
+  const signedDrive = Math.sign(car.gear) * driveAcceleration;
+  const acceleration = Math.max(-grip, Math.min(grip, signedDrive - motionDirection * resistance));
+  let nextSpeed = speedBefore + acceleration * dt;
+  if (motionDirection * nextSpeed < 0) nextSpeed = 0;
+  car.acceleration = (nextSpeed - speedBefore) / dt;
+
+  // Braking/acceleration consumes some of the available tire force. Saturation
+  // widens a turn instead of allowing unlimited lateral acceleration. This is
+  // an aggregate grip model, not individual tire slip or a suspension model.
+  const availableLateral = Math.sqrt(Math.max(0, grip ** 2 - car.acceleration ** 2));
+  const meanSpeed = (speedBefore + nextSpeed) / 2;
+  const desiredYaw = meanSpeed / CAR.wheelbase * Math.tan(car.steering);
+  car.yawRate += (desiredYaw - car.yawRate) * (1 - Math.exp(-dt / HANDLING.yawResponseTime));
+  const yawLimit = Math.abs(meanSpeed) > 0.001 ? availableLateral / Math.abs(meanSpeed) : 0;
+  car.yawRate = Math.max(-yawLimit, Math.min(yawLimit, car.yawRate));
+  car.lateralAcceleration = meanSpeed * car.yawRate;
+  const heading = car.heading + car.yawRate * dt;
+  const midpointHeading = (car.heading + heading) / 2;
+  const x = car.x - Math.sin(midpointHeading) * meanSpeed * dt;
+  const z = car.z - Math.cos(midpointHeading) * meanSpeed * dt;
   if (obstacles.some(obstacle => overlapsCar(x, z, heading, obstacle))) {
-    car.speed = 0;
+    stopCar(car);
   } else {
     car.x = x;
     car.z = z;
     car.heading = heading;
+    car.speed = nextSpeed;
   }
+}
+
+/** Stop transient motion on collision or page suspension without changing gear. */
+export function stopCar(car: CarState): void {
+  car.speed = 0;
+  car.yawRate = 0;
+  car.acceleration = 0;
+  car.lateralAcceleration = 0;
+  car.throttle = 0;
+  car.brake = 0;
+  car.directionWait = 0;
+  car.pendingDirection = 0;
+  car.shiftRemaining = 0;
+  car.engineRpm = TRANSMISSION.idleRpm;
 }
 
 /** Separating-axis test between the sedan footprint and axis-aligned scenery. */
