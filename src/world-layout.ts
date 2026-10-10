@@ -1,39 +1,23 @@
 import type { Obstacle } from './simulation.ts';
+import { CROSSING_RAMPS, JUNCTION_SURFACES, PARALLEL_PARKING, parkingMarkings, PARKING_LOT, PARKING_ENTRANCE, TEST_AREA, TEST_ENTRANCE, WORLD_BOUNDS, STREET_SURFACES } from './road-network.ts';
+import { ROAD_POSTS } from './traffic-layout.ts';
+export { PARKING_LOT, PARKING_ENTRANCE, TEST_AREA, TEST_ENTRANCE, WORLD_BOUNDS, ROAD_WIDTH } from './road-network.ts';
 
 export interface Rect { x: number; z: number; width: number; depth: number }
 export interface House extends Rect { height: number; color: number; roofColor: number }
 export interface Tree { x: number; z: number; size: number }
 
-// The north and south roads are the longer sides; the middle road connects them.
-export const ROAD_WIDTH = 10;
-export const ROADS: readonly Rect[] = [
-  { x: 0, z: -60, width: 210, depth: ROAD_WIDTH },
-  { x: 0, z: 60, width: 210, depth: ROAD_WIDTH },
-  { x: -100, z: 0, width: ROAD_WIDTH, depth: 120 },
-  { x: 100, z: 0, width: ROAD_WIDTH, depth: 120 },
-  { x: 0, z: 0, width: ROAD_WIDTH, depth: 120 },
-];
+// Lane geometry and physical pavement share the same street definitions.
+export const ROADS: readonly Rect[] = STREET_SURFACES;
 
-// Outside the north T-junction, directly ahead from the original starting lane.
-export const PARKING_LOT: Readonly<Rect> = { x: 0, z: -125, width: 120, depth: 90 };
-export const PARKING_ENTRANCE: Readonly<Rect> = { x: 0, z: -72.5, width: 16, depth: 15 };
-export const TEST_AREA: Readonly<Rect> = { x: 102, z: -136, width: 68, depth: 72 };
-export const TEST_ENTRANCE: Readonly<Rect> = { x: 64, z: -106, width: 8, depth: 12 };
-export const PAVED_SURFACES: readonly Rect[] = [...ROADS, PARKING_ENTRANCE, PARKING_LOT, TEST_ENTRANCE, TEST_AREA];
+export const PAVED_SURFACES: readonly Rect[] = [...ROADS, ...JUNCTION_SURFACES, PARKING_ENTRANCE, PARKING_LOT, TEST_ENTRANCE, TEST_AREA, PARALLEL_PARKING, ...CROSSING_RAMPS];
 export const ROAD_HEIGHT = 0.08;
 export const SIDEWALK_HEIGHT = ROAD_HEIGHT + 0.15;
 export const TEST_RAMP = { x: 84, z: -145, width: 10, depth: 32, height: 1.2, rampLength: 12 } as const;
 export const TEST_CURB = { x: 111, z: -145, width: 10, depth: 16, height: 0.15 } as const;
-export const WORLD_BOUNDS = { minX: -177, maxX: 177, minZ: -194, maxZ: 137 } as const;
 
-// Perimeter spaces leave a large unobstructed center for circles and figure eights.
-export const PARKING_MARKINGS: Rect[] = [];
-for (let x = -48; x <= 48; x += 3) PARKING_MARKINGS.push({ x, z: -164, width: 0.12, depth: 6 });
-PARKING_MARKINGS.push({ x: 0, z: -167, width: 96, depth: 0.12 });
-for (const x of [-54, 54]) {
-  for (let z = -154; z <= -90; z += 3.2) PARKING_MARKINGS.push({ x, z, width: 6, depth: 0.12 });
-  PARKING_MARKINGS.push({ x: Math.sign(x) * 57, z: -122, width: 0.12, depth: 64 });
-}
+// Authoritative space dimensions generate both lot and parallel-bay paint.
+export const PARKING_MARKINGS: readonly Rect[] = parkingMarkings();
 
 function occupiesParkingArea(rect: Rect): boolean {
   return [PARKING_LOT, PARKING_ENTRANCE].some(paved =>
@@ -59,8 +43,13 @@ for (const x of [-123, 123]) {
   for (const z of [-36, 0, 36]) HOUSES.push({ x, z, width: 12, depth: 15, height: 6, color: colors[HOUSES.length % colors.length]!, roofColor: 0x696a62 });
 }
 
+// Southern block preserves open sightlines at the new intersections.
+for (const x of [-65, -35, 35, 65]) {
+  for (const z of [112, 211]) HOUSES.push({ x, z, width: 13, depth: 12, height: 6, color: colors[HOUSES.length % colors.length]!, roofColor: 0x696a62 });
+}
+
 export const DRIVEWAYS: readonly Rect[] = HOUSES.filter(house => Math.abs(house.x) < 100).map(house => {
-  const roadZ = house.z < 0 ? -60 : 60;
+  const roadZ = house.z > 150 ? 180 : house.z < 0 ? -60 : 60;
   const towardRoad = Math.sign(roadZ - house.z);
   const edge = house.z + towardRoad * house.depth / 2;
   const end = roadZ - towardRoad * 5;
@@ -107,6 +96,8 @@ for (const x of [-113, -86, -15, 15, 86, 113]) {
   for (const z of [-22, 14, 29]) TREES.push({ x, z, size: 0.9 + (TREES.length % 3) * 0.15 });
 }
 
+for (const x of [-82, -18, 18, 82]) TREES.push({ x, z: 203, size: 1 });
+
 const boundaryCenterZ = (WORLD_BOUNDS.minZ + WORLD_BOUNDS.maxZ) / 2;
 const boundaryHalfDepth = (WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) / 2;
 export const BOUNDARY_OBSTACLES: readonly Obstacle[] = [
@@ -120,4 +111,5 @@ export const OBSTACLES: Obstacle[] = [
   ...HOUSES.map(house => ({ x: house.x, z: house.z, halfWidth: house.width / 2, halfDepth: house.depth / 2 })),
   ...TREES.map(tree => ({ x: tree.x, z: tree.z, halfWidth: 0.28 * tree.size, halfDepth: 0.28 * tree.size })),
   ...BOUNDARY_OBSTACLES,
+  ...ROAD_POSTS.map(post => ({ x: post.x, z: post.z, halfWidth: post.width / 2, halfDepth: post.depth / 2 })),
 ];

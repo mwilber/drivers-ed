@@ -3,6 +3,8 @@ import { createScene } from './scene.ts';
 import { createCar, indicatorLit, type GearSelection } from './simulation.ts';
 import { ACTIONS, ACTION_LABELS, DriverInput, keyLabel, type Action } from './driver-input.ts';
 import { createVehiclePhysics, type Spawn, type VehiclePhysics } from './vehicle-physics.ts';
+import { TrafficSignals, upcomingControl, controlGuidance } from './traffic-rules.ts';
+import { ROAD_RULES, ROAD_EXAMPLES, APPROACHES, speedZoneAt } from './traffic-layout.ts';
 import { SimulationClock } from './simulation-clock.ts';
 import { DAMAGE_PANELS } from './vehicle-damage.ts';
 import { DEFAULT_VIEW, HeadLook, loadView, serializeView, type ViewSettings } from './cockpit.ts';
@@ -23,6 +25,9 @@ const context = map.getContext('2d')!;
 let car = createCar();
 let physics: VehiclePhysics | undefined;
 const clock = new SimulationClock();
+const trafficSignals = new TrafficSignals();
+const roadContext = document.querySelector<HTMLElement>('#road-context')!;
+const roadControl = document.querySelector<HTMLElement>('#road-control')!;
 const driverInput = new DriverInput();
 const headLook = new HeadLook();
 const viewStorageKey = 'drivers-ed.view.v1';
@@ -60,10 +65,11 @@ function interrupt() {
 function reset(spawn?: Spawn) {
   if (!physics) return;
   physics.reset(spawn);
+  trafficSignals.reset();
   clock.reset();
   driverInput.reset();
   clearInput();
-  showNotice(spawn ? 'Test area. Select Drive to approach the ramp.' : 'Back at the start. Select Drive to begin.');
+  showNotice(spawn ? 'Ready at the practice position. Select Drive to begin.' : 'Back at the start. Select Drive to begin.');
 }
 function activate(action: Action) {
   const selection = gearActions[action];
@@ -162,6 +168,12 @@ document.querySelector('#default-bindings')!.addEventListener('click', () => {
 });
 document.querySelector('#reset')!.addEventListener('click', () => { reset(); canvas.focus(); });
 document.querySelector('#test-area')!.addEventListener('click', () => { reset({ x: TEST_RAMP.x, z: -118, heading: 0 }); canvas.focus(); });
+document.querySelector('#road-example')!.addEventListener('change', event => {
+  const select = event.target as HTMLSelectElement;
+  const spawn = ROAD_EXAMPLES[select.value as keyof typeof ROAD_EXAMPLES];
+  if (spawn) reset(spawn);
+  select.value = ''; canvas.focus();
+});
 repairButton.addEventListener('click', () => {
   physics?.repair();
   canvas.focus();
@@ -278,7 +290,7 @@ function updateControlDisplay() {
 
 function drawMap() {
   const c = context;
-  c.clearRect(0, 0, 480, 320);
+  c.clearRect(0, 0, map.width, map.height);
   c.save();
   const bounds = WORLD_BOUNDS;
   const scale = Math.min((map.width - 24) / (bounds.maxX - bounds.minX), (map.height - 24) / (bounds.maxZ - bounds.minZ));
@@ -304,6 +316,15 @@ function drawMap() {
   for (const tree of TREES) {
     c.beginPath(); c.arc(tree.x, tree.z, 2.6 * tree.size, 0, Math.PI * 2); c.fill();
   }
+  for (const approach of APPROACHES) {
+    if (approach.kind === 'priority') continue;
+    c.fillStyle = approach.kind === 'signal' ? { red: '#bb4131', yellow: '#c28e17', green: '#267849' }[trafficSignals.color(approach.id)!] : approach.kind === 'yield' ? '#ba7d21' : '#b44737';
+    c.beginPath(); c.arc(approach.x, approach.z, 2.2, 0, Math.PI * 2); c.fill();
+  }
+  c.fillStyle = '#526b55'; c.font = 'bold 9px sans-serif';
+  c.fillText('15 MPH', -50, 160);
+  c.fillText('25 MPH', -50, 4);
+  c.fillText('P', 107, 118);
   c.translate(car.x, car.z);
   c.rotate(-car.heading);
   c.fillStyle = '#264d3b22';
@@ -327,6 +348,7 @@ async function start() {
   physics.damage.handlingEnabled = damageHandling.checked;
   car = physics.state;
   clearInput();
+  document.querySelector('#road-jurisdiction')!.textContent = `${ROAD_RULES.jurisdiction} · keep right`;
   showNotice(`Ready. Select Drive (${driverInput.bindings.drive.map(keyLabel).join(' / ')}), then accelerate (${driverInput.bindings.forward.map(keyLabel).join(' / ')}).`);
   let lastTime = performance.now();
   let lostContext = false;
@@ -345,7 +367,7 @@ async function start() {
     if (document.hidden || suspended || windowBlurred || lostContext) { clock.reset(); return; }
     const input = driverInput.snapshot();
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
-    clock.advance(dt, step => physics!.step(input, step));
+    clock.advance(dt, step => { physics!.step(input, step); trafficSignals.step(); });
     const damage = physics!.damage;
     const impacts = damage.drainEvents().filter(event => event.kind === 'impact');
     if (impacts.length) {
@@ -377,7 +399,10 @@ async function start() {
     document.querySelector<HTMLMeterElement>('#brake-meter')!.value = car.brake;
     updateControlDisplay();
     status.textContent = physics!.needsRecovery ? 'PRESS R TO RECOVER' : car.selectedGear === 'P' ? 'PARK · SELECT DRIVE TO BEGIN' : car.parkingBrake ? 'PARKING BRAKE ON' : Math.abs(car.speed) < 0.05 ? 'READY WHEN YOU ARE' : !isOnRoad(car.x, car.z) ? 'OFF THE BEATEN PATH' : car.speed < 0 ? 'TAKING A STEP BACK' : 'A LITTLE FURTHER FROM HURRY';
-    scene.render(car, physics!, view, headLook.yaw, time);
+    const zone = isOnRoad(car.x, car.z) ? speedZoneAt(car) : undefined;
+    roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
+    roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
+    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds);
     drawMap();
   }
   requestAnimationFrame(frame);

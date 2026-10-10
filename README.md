@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 6's first playable increment adds shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments to the Rapier sedan.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 7 adds US road controls, working signals, shared lane connections, crossings and parking examples in an expanded southern neighborhood. The Rapier sedan retains Phase 6's shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
 ## Run locally
 
@@ -41,6 +41,7 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | K (hold) | Look back through the rear window; release to face forward |
 | Shoulder / Back buttons (hold) | Pointer, touch, or focused Space/Enter head checks |
 | View settings button | Adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
+| Try a road example selector | Reset in Park before signals, a stop/yield junction, or parallel parking; restart the signal cycle |
 | Test area button | Reset upright on the approach to the suspension test ramp |
 | Repair car button | Restore appearance and handling in place, preserving position and motion |
 | Handling effects checkbox | Enable/disable damage-related handling changes; body damage remains visible |
@@ -141,6 +142,24 @@ The initial rendering budget caps mirrors at **three 512 × 256 targets, up to 3
 
 Acceptance checks verify both lane edges in the forward view, rear/adjacent target visibility during head checks, correct mirror direction and horizontal reflection across vehicle headings, mirror blind spots, level-horizon orientation, independent held sources and cleanup, old-binding migration, saved-view validation, and head movement/mirror scheduling at 30/60/144 Hz. All previous driving regressions remain in the suite. Browser smoke checks cover saved preferences across reload, Low/Off/default mirrors, desktop, 390 × 844 portrait, and 844 × 390 landscape layouts. Surrounding-position checks use static reference points/scenery; moving traffic still belongs to Phase 8. Mirrors currently use a screen strip; physical mirror housings, mouse/vertical free look, and broader hardware profiling remain possible follow-up work within Phase 6.
 
+## Phase 7 — Streets and traffic rules (implemented)
+
+The town uses **United States conventions and right-hand traffic**, as confirmed by the project owner. The southern expansion extends from Town Street (Z = 60 m) to Garden Street (Z = 180 m), with three connecting streets, a southern block, and recessed parallel parking bays. Drive south along any of the original north–south streets to reach it. The original practice lot and suspension area remain accessible.
+
+- Shared street and junction data generates directional lanes, permitted straight/left/right connections, and turn paths with room for the sedan. Pavement, wide junction aprons, and crossing openings feed both Three.js and Rapier. Double yellow center lines, white edges, and lane arrows leave junctions clear; arrows show the movements actually available at each junction.
+- **Lot crossroads:** four-way intersection with an all-way STOP on every approach, including the parking-lot exit. Stop before the white bar, then yield to earlier arrivals, the driver on your right at simultaneous arrival, pedestrians, and opposing traffic when turning left.
+- **Town crossroads:** opposing north/south approaches have 14 seconds green, 3 seconds yellow, and 2 seconds all red, followed by the same sequence for east/west. The 38-second cycle runs on the vehicle's 120 Hz simulation clock, pauses with driving, and restarts on any reset or example selection. Circular green permits left turns after yielding; all four approaches have **NO TURN ON RED** signs. Yellow means stop if you can do so safely, or clear the junction if already committed.
+- **Garden junction:** the Center/Garden Drive approach has a STOP; Garden Street is the through route. The Town Street branch at the west junction also has a STOP. At the **east junction**, the Town Street branch has a YIELD sign and triangular yield line; East Street is the through route.
+- Marked crossings at the lot crossroads, town crossroads, and Garden junction have flush sidewalk openings. Stop bars sit 1.8 m before the near crossing edge, covering only the incoming lane. Signs face approaching drivers from the right verge. Sign and signal support posts have matching physical colliders and can damage the car when struck.
+- **Speed zones:** 25 mph on the original town streets, 15 mph in the southern Garden neighborhood, and 10 mph in the lot and suspension practice area. Paired transition signs mark the southern boundary at Z = 78 m and the lot transition at Z = −76 m. Additional signs repeat the town limit. The driver display shows the current zone and the nearest control ahead, with distance measured from the front bumper; map dots match roadside signal colors.
+- The practice lot has explicit 3 × 6 m and 3.2 × 6 m perpendicular spaces that generate their paint. Three north-facing 3 × 8 m parallel spaces sit on the east side of the southern East Street extension, around Z = 108–124 m. Approach northbound from the southeast bend and reverse into a bay. Houses, trees, map bounds, and the hedge boundary expand with the streets.
+
+Use **Try a road example** to start before the town signals, lot all-way stop, Garden T-junction stop, east junction yield, or parallel parking bays. Selection resets the car undamaged in Park and restarts the signal cycle, while preserving view preferences and the damage-handling setting. The Test area and neighborhood Reset controls remain available.
+
+The controls use familiar [FHWA MUTCD sign, marking, and signal conventions](https://mutcd.fhwa.dot.gov/kno_11th_Editionr1.htm); the stop-line spacing follows the [MUTCD marking guidance](https://mutcd.fhwa.dot.gov/pdfs/11th_Edition/mutcd11thedition.pdf), and permissive left turns follow [FHWA's signal timing guidance](https://ops.fhwa.dot.gov/publications/fhwahop08024/chapter4.htm). Signal timing, speed-zone values, and placeholder dimensions are authored demonstration choices. This increment supplies road-control data and live guidance for free driving. AI compliance and other road users belong to Phases 8–9; violation scoring and exercises remain Phase 13 work. The car is not automatically stopped at signs, restricted by signals, or governed to zone limits.
+
+Acceptance checks cover every lane and permitted turn path with a full sedan footprint in both generated driving-side orientations, turning radii above 5.7 m, connected routes, flush crossings, parking clearance, the selected US lane orientation, signs/stop lines/speed zones, signal phase boundaries and clearance, permissive left turns, rule metadata, front-bumper guidance, example spawns, physical sign impacts, and identical signal timing at 30/60/144 Hz. Existing driving, terrain, damage, and cockpit tests remain passing. Browser checks cover each example, manual approach/braking, signal and guidance agreement, settings pause/reset, and desktop/phone/landscape layouts.
+
 ## Structure
 
 - `src/simulation.ts`: Gear-selection interlocks, switch timing, shared drivetrain forces, and the Phase 2 planar reference model, in metres/seconds/radians.
@@ -151,12 +170,18 @@ Acceptance checks verify both lane edges in the forward view, rear/adjacent targ
 - `src/damage-visuals.ts`: Independent placeholder body panels, dents/scratches, and restoration of original geometry and paint.
 - `src/vehicle-config.ts`: Sedan dimensions, mass, engine torque curve, transmission ratios, and suspension/handling tuning.
 - `src/simulation-clock.ts`: Fixed-step accumulator shared by the browser and frame-rate regression checks.
+- `src/road-network.ts`: Shared streets, junctions, generated directional lanes/turn paths, crossings, and parking spaces.
+- `src/traffic-layout.ts`: Confirmed US profile, live lane graph, approaches, speed zones, signs, signal fixtures, and repeatable example spawns.
+- `src/traffic-rules.ts`: Fixed-step signal clock, movement-rule metadata, and upcoming-control guidance.
+- `src/road-visuals.ts`: Shared road markings, signs, arrows, support posts, and signal lenses.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
 - `src/main.ts`: Input handling, fixed-step loop, instruments, and map.
 - `src/style.css`: Responsive interface and touch controls.
 - `tests/driver-controls.test.mjs`: Explicit pedal/selector behavior, parking hold, input overlap/interruption, bindings, switch timing, repair/reset, and frame-rate consistency.
 - `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
+- `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
+- `tests/road-network.test.mjs`: Network connectivity, both driving sides, sedan/curb clearance, feasible turning radii, crossing openings, and parking geometry.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
 - `tests/parking-lot.test.mjs`: Paved access, obstacle clearance, and complete practice circles in the parking lot.
@@ -224,15 +249,15 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Drivers can judge lane position, reverse, and check surrounding traffic positions. Mirrors show the correct views and remain within the agreed rendering budget. The first increment's static sightline checks and initial configurable rendering-work cap are described above; hardware profiling and moving-traffic scenarios remain future validation.
 
-### Phase 7 — Streets and traffic rules
+### Phase 7 — Streets and traffic rules (implemented)
 
 **Focus:** Turn the existing neighborhood into a consistent road network.
 
 - Define lanes, intersection connections, stop lines, crossings, parking spaces, speed zones, signs, and signals using shared world data.
-- Confirm the intended driving side and jurisdiction before implementing specific rule behavior.
+- Confirm the intended driving side and jurisdiction before implementing specific rule behavior. Confirmed: United States, right-hand traffic.
 - Add a few controlled intersection and parking examples within the current map.
 
-**Testing checkpoint:** Road markings, collision geometry, lane connections, and signal states agree. Every route and intersection can be driven manually without ambiguous or impossible geometry.
+**Testing checkpoint:** Road markings, collision geometry, lane connections, and signal states agree. Every route and intersection can be driven manually without ambiguous or impossible geometry. Implemented checks and playable examples are described above.
 
 ### Phase 8 — Vehicle traffic
 

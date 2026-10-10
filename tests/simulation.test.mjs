@@ -58,7 +58,7 @@ test('rotated footprint collision checks both sedan axes', () => {
 });
 
 test('road loop has the connecting street and a clear spawn', () => {
-  assert.equal(ROADS.length, 5);
+  assert.ok(ROADS.length >= 5, 'original loop remains part of the expanded town');
   for (const [x, z] of [[0, 0], [0, -60], [0, 60], [-100, 0], [100, 0]]) assert.ok(isOnRoad(x, z));
   assert.equal(isOnRoad(50, 0), false);
   const car = createCar();

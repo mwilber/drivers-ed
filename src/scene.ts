@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createRoadVisuals } from './road-visuals.ts';
 import { createDamageVisuals } from './damage-visuals.ts';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { indicatorLit, type CarState } from './simulation.ts';
@@ -75,16 +76,7 @@ export function createScene(canvas: HTMLCanvasElement) {
     label.position.set(x, ROAD_HEIGHT + 0.01, z);
     scene.add(label);
   }
-  // Break center lines at all three intersections along each long street.
-  for (const z of [-60, 60]) {
-    for (let x = -90; x <= 90; x += 7) {
-      if (Math.abs(x) < 9) continue;
-      box(scene, 3.3, 0.006, 0.12, x, 0.084, z, 0xe6d59d).castShadow = false;
-    }
-  }
-  for (const x of [-100, 0, 100]) {
-    for (let z = -47; z < 50; z += 7) box(scene, 0.12, 0.006, 3.3, x, 0.084, z, 0xe6d59d).castShadow = false;
-  }
+  const roadVisuals = createRoadVisuals(scene);
 
   for (const house of HOUSES) {
     // Plain massing only: walls and a pitched roof, without doors or windows.
@@ -206,7 +198,8 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number) {
+    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0) {
+      roadVisuals.update(trafficTime);
       damageVisuals.update(physics.damage);
       for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
       for (const beam of headlightBeams) beam.intensity = state.headlights ? 900 : 0;

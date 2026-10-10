@@ -221,3 +221,37 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
   #view-state { display: none; }
   .location { display: none; }
 }
+
+.road-panel { position: absolute; left: 38px; top: 245px; width: 260px; padding: 12px; border-radius: 12px; background: #f3f3e9ee; font-size: 10px; }
+.road-panel p { margin: 0 0 7px; line-height: 1.4; }
+#road-jurisdiction { font-size: 8px; letter-spacing: 0.5px; }
+#road-context { display: block; margin-bottom: 7px; font-size: 10px; }
+.road-panel label { display: block; font-size: 9px; margin-bottom: 4px; }
+.road-panel select { width: 100%; padding: 6px; border: 1px solid #98aa94; border-radius: 5px; color: #284b3d; background: #f9faf5; font: inherit; }
+@media (max-width: 1100px) { .road-panel { top: 243px; left: 24px; width: 235px; } .location { display: none; } }
+@media (max-width: 720px) { .road-panel { top: 382px; } }
+@media (max-width: 600px) {
+  .road-panel { top: 334px; left: 18px; width: 180px; padding: 8px; font-size: 8px; }
+  #road-context { font-size: 8px; margin-bottom: 4px; }
+  #road-jurisdiction { font-size: 7px; }
+  .road-panel p { margin-bottom: 4px; }
+  .road-panel label { font-size: 7px; }
+  .road-panel select { padding: 4px; font-size: 8px; }
+}
+@media (max-height: 700px) and (min-width: 601px) {
+  .road-panel { top: 190px; width: 210px; font-size: 8px; }
+  #road-context { font-size: 8px; }
+  .road-panel p { margin-bottom: 4px; }
+}
+@media (max-height: 700px) and (max-width: 600px) {
+  .road-panel { top: 193px; left: 18px; width: 180px; }
+  .damage-panel { display: none; }
+}
+
+@media (max-height: 550px) and (min-width: 601px) {
+  .damage-panel { top: 75px; bottom: auto; width: 210px; }
+  .road-panel { top: 225px; padding: 8px; }
+  .road-panel label, #road-jurisdiction { display: none; }
+  .road-panel p { margin-bottom: 4px; }
+  .road-panel select { padding: 4px; }
+}

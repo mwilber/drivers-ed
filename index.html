@@ -12,10 +12,24 @@
       <canvas id="world" tabindex="0" aria-label="First-person driving simulator showing a suburban neighborhood"></canvas>
       <header class="topbar">
         <div class="identity"><span class="brand-mark" aria-hidden="true">d<span>e</span></span><div><h1>Drivers Ed<span class="brand-dot">.</span></h1><p>A little room to learn.</p></div></div>
-        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 06</span></div>
+        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 07</span></div>
       </header>
       <section class="location" aria-label="Current environment"><span class="eyebrow">THE NEIGHBORHOOD</span><h2>Take the long way.</h2><p>A quiet block. An open road. Your own pace.</p></section>
-      <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="320" aria-label="Map showing the car and rectangular streets"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
+      <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="420" aria-label="Map showing the car, expanded streets, practice lot, and test area"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
+      <aside class="road-panel" aria-label="Road rules and examples">
+        <p id="road-jurisdiction">United States · keep right</p>
+        <strong id="road-context">25 MPH LIMIT · Town neighborhood</strong>
+        <p id="road-control">Keep right · yield to pedestrians</p>
+        <label for="road-example">Try a road example</label>
+        <select id="road-example" aria-label="Try a road example (resets car and signal cycle)">
+          <option value="">Choose a starting position…</option>
+          <option value="signals">Town traffic signals</option>
+          <option value="stops">Lot all-way stop</option>
+          <option value="garden">Garden T-junction stop</option>
+          <option value="yield">East junction yield</option>
+          <option value="parking">Parallel parking bays</option>
+        </select>
+      </aside>
       <div id="notice" role="status"></div>
       <aside id="mirrors" aria-label="Rear-facing mirrors, horizontally reflected">
         <div id="mirror-left" class="mirror-view" role="img" aria-label="Left side mirror"><span>LEFT MIRROR</span></div>

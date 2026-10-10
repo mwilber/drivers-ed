@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { createCar, selectGear, stopCar, updateDriveForces, type DrivingInput, type GearSelection } from './simulation.ts';
 import { CAR, HANDLING, SUSPENSION, TRANSMISSION } from './vehicle-config.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, isOnRoad, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TREES } from './world-layout.ts';
+import { ROAD_POSTS } from './traffic-layout.ts';
 import { FIXED_STEP } from './simulation-clock.ts';
 import { VehicleDamage, type DamageContact } from './vehicle-damage.ts';
 
@@ -50,6 +51,7 @@ export class VehiclePhysics {
     if (options.environment !== 'flat') {
       for (const rect of [...PAVED_SURFACES, ...DRIVEWAYS]) this.addBox({ ...rect, y: ROAD_HEIGHT / 2, height: ROAD_HEIGHT }, 'asphalt');
       for (const rect of SIDEWALKS) this.addBox({ ...rect, y: SIDEWALK_HEIGHT / 2, height: SIDEWALK_HEIGHT });
+      for (const post of ROAD_POSTS) this.addBox({ ...post, y: post.height / 2 }, 'metal');
       for (const house of HOUSES) this.addBox({ ...house, y: house.height / 2 }, 'masonry');
       for (const tree of TREES) {
         const collider = this.world.createCollider(RAPIER.ColliderDesc.cylinder(1.75 * tree.size, 0.29 * tree.size)
