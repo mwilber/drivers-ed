@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 5 adds explicit automatic gear selection, a parking brake, lights, indicators, a horn control, and remappable keyboard bindings to the Rapier sedan.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 6's first playable increment adds shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments to the Rapier sedan.
 
 ## Run locally
 
@@ -37,6 +37,10 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | Space (hold) | Horn control with visible feedback; audio is planned for Phase 11 |
 | R / Reset button | Return to the starting position in Park |
 | Keyboard bindings button | Remap controls, or restore defaults |
+| J / L (hold) | Check left / right shoulder; release to face forward |
+| K (hold) | Look back through the rear window; release to face forward |
+| Shoulder / Back buttons (hold) | Pointer, touch, or focused Space/Enter head checks |
+| View settings button | Adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
 | Test area button | Reset upright on the approach to the suspension test ramp |
 | Repair car button | Restore appearance and handling in place, preserving position and motion |
 | Handling effects checkbox | Enable/disable damage-related handling changes; body damage remains visible |
@@ -45,7 +49,7 @@ The car starts in **Park**. Select **Drive (4)**, then hold **W** to accelerate.
 
 Park and engagement of Drive/Reverse require a complete stop (below 0.03 m/s, allowing small suspension jitter). Unsafe selections are rejected with a notice and must be requested again after stopping. Drive/Reverse engagement has a 0.35-second power interlock. **Neutral (3)** can be selected while moving and allows coasting without propulsion. **Park (1)** holds the wheels. The separate parking brake also holds the wheels and cuts propulsion while engaged; it can be applied while moving and stays on until toggled off.
 
-On-screen gear and switch buttons work with mouse or touch. Touch devices also have accelerator, brake, and steering pedals. Hold the horn button with a pointer, or focus it and hold Space/Enter. Keyboard bindings shows every default and supports reassignment to letters, numbers, arrows, Shift, or Space; a conflicting binding is rejected. Assigning a new key replaces that action's default aliases. Bindings persist locally when browser storage is available, and invalid saved data falls back to defaults. Buttons and touch controls remain available after remapping. Analog controllers are deferred until requested.
+On-screen gear and switch buttons work with mouse or touch. Touch devices also have accelerator, brake, and steering pedals. Hold the horn or head-check buttons with a pointer, or focus them and hold Space/Enter. Keyboard bindings shows every default and supports reassignment to letters, numbers, arrows, Shift, or Space; a conflicting binding is rejected. Assigning a new key replaces that action's default aliases. Bindings persist locally when browser storage is available, and invalid saved data falls back to defaults. Older Phase 5 bindings migrate while preserving remaps; if J/K/L are already used, free keys are assigned to the new head checks and shown on their buttons. Buttons and touch controls remain available after remapping. Analog controllers are deferred until requested.
 
 Window blur, hidden-page transitions, opening settings, and graphics interruption clear held pedals, steering inputs, and the horn and pause motion. Returning resumes with released controls. Focusing a form/button clears held inputs; pointer cancellation or lost capture releases its individual input. Deliberate gear, parking-brake, headlight, and indicator selections survive ordinary interruptions. Reset and Test area start in Park with switches off; Repair car preserves their state. Free driving remains available throughout.
 
@@ -125,10 +129,23 @@ This is a game damage model, not crash deformation or a real vehicle safety/cali
 
 Acceptance checks cover safe forward/reverse transitions, Park/Neutral propulsion lockout, braking priority, parking-brake stop/release and slope hold, overlapping device inputs, repeat suppression, interruption cleanup, binding conflicts and corrupt saved preferences, switch timing, repair/reset, and identical state at 30/60/144 Hz. The prior handling, terrain, collision, and damage regressions remain in the suite. Browser smoke checks cover gear selection and rejection, brake and switch feedback, remapping across reload, and desktop/phone-sized layouts.
 
+## Phase 6 — Cockpit visibility and instruments (first increment)
+
+- The driver remains in the left seat, with adjustable eye height (1.12–1.38 m), distance back (0.18–0.55 m), and vertical field of view (55–90°, default 68°). The bounds keep the eye inside the placeholder cabin. The default seating position preserves the earlier forward view and visible hood for lane/parking judgment.
+- Hold **J/L** for a 117° left/right shoulder check, or **K** for a rear-window check. Release to face forward. Opposing shoulder inputs cancel; Back takes priority, with a held shoulder choosing which way to turn. Head turns are independent of steering and gear. All three controls can be remapped, or held using the on-screen pointer/touch buttons. Focus loss, settings, reset, pointer cancellation, and lost capture release head inputs along with existing driving controls.
+- A labeled mirror strip displays an interior rearview and left/right side views from car-local mirror positions. Views are horizontally reflected, follow the physical chassis, and remain rear-facing during head checks. Side views point 17° outward and use a wider FOV than the interior mirror. They overlap the view behind the car, but adjacent blind spots require shoulder checks. The player's shell is omitted from mirror passes; these are simplified placeholder mirrors without glass optics or cabin/body occlusion.
+- **View settings** can disable chassis pitch/roll for a level horizon, or disable animated head turns for instant checks. The seat still follows the physical car's position; no extra shake is introduced. Preferences save locally with validation and safe defaults for corrupt/older data. Reset preserves view preferences and clears the current head check. Opening either settings dialog pauses driving and releases held inputs.
+- The compact instrument cluster retains MPH and P/R/N/D/automatic ratio, and adds live engine RPM, throttle, and service-brake force meters. Park uses the service-brake force meter as part of its simplified wheel hold; the separate parking brake retains its existing switch feedback. Placeholder cockpit geometry remains in place.
+
+The initial rendering budget caps mirrors at **three 512 × 256 targets, up to 30 batches/second** (11.8 million mirror pixels/second), with **Low: 256 × 128 at up to 15 Hz**, or **Off**. Each batch renders one pass per mirror, with a 220 m far plane, no multisampling/mipmaps, and reused main-view shadows. Slow frames and resume never trigger catch-up batches. The small screen overlay reuses the latest textures between batches. This caps authored rendering work; it is not a measured GPU/frame-time guarantee across devices. Device profiling and a supported hardware frame-rate target remain to be agreed.
+
+Acceptance checks verify both lane edges in the forward view, rear/adjacent target visibility during head checks, correct mirror direction and horizontal reflection across vehicle headings, mirror blind spots, level-horizon orientation, independent held sources and cleanup, old-binding migration, saved-view validation, and head movement/mirror scheduling at 30/60/144 Hz. All previous driving regressions remain in the suite. Browser smoke checks cover saved preferences across reload, Low/Off/default mirrors, desktop, 390 × 844 portrait, and 844 × 390 landscape layouts. Surrounding-position checks use static reference points/scenery; moving traffic still belongs to Phase 8. Mirrors currently use a screen strip; physical mirror housings, mouse/vertical free look, and broader hardware profiling remain possible follow-up work within Phase 6.
+
 ## Structure
 
 - `src/simulation.ts`: Gear-selection interlocks, switch timing, shared drivetrain forces, and the Phase 2 planar reference model, in metres/seconds/radians.
 - `src/driver-input.ts`: Independent held input sources, operating switches, binding validation, and versioned preferences.
+- `src/cockpit.ts`: Validated view preferences, controlled head movement, driver/mirror camera placement, reflection geometry, and mirror update budget.
 - `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
 - `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and future audio events.
 - `src/damage-visuals.ts`: Independent placeholder body panels, dents/scratches, and restoration of original geometry and paint.
@@ -139,6 +156,7 @@ Acceptance checks cover safe forward/reverse transitions, Park/Neutral propulsio
 - `src/main.ts`: Input handling, fixed-step loop, instruments, and map.
 - `src/style.css`: Responsive interface and touch controls.
 - `tests/driver-controls.test.mjs`: Explicit pedal/selector behavior, parking hold, input overlap/interruption, bindings, switch timing, repair/reset, and frame-rate consistency.
+- `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
 - `tests/parking-lot.test.mjs`: Paved access, obstacle clearance, and complete practice circles in the parking lot.
@@ -196,7 +214,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Each control has a clear effect and visible state; unsafe direction changes are handled consistently; no input remains stuck after supported focus/pointer interruptions. Implemented checks are described above. Analog controllers remain request-dependent, and horn audio belongs to Phase 11.
 
-### Phase 6 — Cockpit visibility and instruments
+### Phase 6 — Cockpit visibility and instruments (first increment implemented)
 
 **Focus:** Give the driver the information and sightlines needed for realistic maneuvers.
 
@@ -204,7 +222,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Add controlled head movement, rearview and side mirrors, and ways to check blind spots.
 - Offer view and camera-motion settings for comfort.
 
-**Testing checkpoint:** Drivers can judge lane position, reverse, and check surrounding traffic positions. Mirrors show the correct views and remain within the agreed rendering budget.
+**Testing checkpoint:** Drivers can judge lane position, reverse, and check surrounding traffic positions. Mirrors show the correct views and remain within the agreed rendering budget. The first increment's static sightline checks and initial configurable rendering-work cap are described above; hardware profiling and moving-traffic scenarios remain future validation.
 
 ### Phase 7 — Streets and traffic rules
 

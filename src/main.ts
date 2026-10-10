@@ -5,6 +5,7 @@ import { ACTIONS, ACTION_LABELS, DriverInput, keyLabel, type Action } from './dr
 import { createVehiclePhysics, type Spawn, type VehiclePhysics } from './vehicle-physics.ts';
 import { SimulationClock } from './simulation-clock.ts';
 import { DAMAGE_PANELS } from './vehicle-damage.ts';
+import { DEFAULT_VIEW, HeadLook, loadView, serializeView, type ViewSettings } from './cockpit.ts';
 import { HOUSES, isOnRoad, PARKING_LOT, PARKING_MARKINGS, PAVED_SURFACES, TEST_AREA, TEST_CURB, TEST_RAMP, TREES, WORLD_BOUNDS } from './world-layout.ts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
@@ -23,9 +24,15 @@ let car = createCar();
 let physics: VehiclePhysics | undefined;
 const clock = new SimulationClock();
 const driverInput = new DriverInput();
+const headLook = new HeadLook();
+const viewStorageKey = 'drivers-ed.view.v1';
+let view: ViewSettings = { ...DEFAULT_VIEW };
+try { view = loadView(localStorage.getItem(viewStorageKey)); } catch { /* Session defaults work without storage. */ }
 const bindingStorageKey = 'drivers-ed.bindings.v1';
 try { driverInput.load(localStorage.getItem(bindingStorageKey)); } catch { /* Storage may be unavailable. */ }
 const settings = document.querySelector<HTMLDialogElement>('#bindings-dialog')!;
+const viewDialog = document.querySelector<HTMLDialogElement>('#view-dialog')!;
+const viewMessage = document.querySelector<HTMLElement>('#view-message')!;
 const bindingMessage = document.querySelector<HTMLElement>('#binding-message')!;
 let remapping: Action | undefined;
 let suspended = false;
@@ -41,6 +48,7 @@ function showNotice(message: string) {
 }
 function clearInput() {
   driverInput.clear();
+  headLook.reset();
   pointerButtons.clear();
   document.querySelectorAll('[data-drive]').forEach(button => button.classList.remove('pressed'));
 }
@@ -87,6 +95,52 @@ function renderBindings() {
   }
 }
 renderBindings();
+function renderViewSettings() {
+  for (const key of ['fov', 'eyeHeight', 'seatZ'] as const) {
+    document.querySelector<HTMLInputElement>(`#view-${key}`)!.value = String(view[key]);
+    document.querySelector<HTMLOutputElement>(`#value-${key}`)!.value = key === 'fov' ? `${view[key]}°` : `${view[key].toFixed(2)} m`;
+  }
+  for (const key of ['followBody', 'smoothLook'] as const) document.querySelector<HTMLInputElement>(`#view-${key}`)!.checked = view[key];
+  document.querySelector<HTMLSelectElement>('#view-mirrors')!.value = view.mirrors;
+}
+renderViewSettings();
+function saveView() {
+  try { localStorage.setItem(viewStorageKey, serializeView(view)); viewMessage.textContent = 'View preferences saved.'; }
+  catch { viewMessage.textContent = 'Preferences apply for this session; browser storage is unavailable.'; }
+}
+document.querySelector('#view-settings')!.addEventListener('click', () => {
+  suspended = true;
+  interrupt();
+  viewDialog.showModal();
+});
+for (const key of ['fov', 'eyeHeight', 'seatZ'] as const) {
+  document.querySelector<HTMLInputElement>(`#view-${key}`)!.addEventListener('input', event => {
+    view[key] = Number((event.target as HTMLInputElement).value);
+    renderViewSettings();
+    saveView();
+  });
+}
+for (const key of ['followBody', 'smoothLook'] as const) {
+  document.querySelector<HTMLInputElement>(`#view-${key}`)!.addEventListener('change', event => {
+    view[key] = (event.target as HTMLInputElement).checked;
+    saveView();
+  });
+}
+document.querySelector('#view-mirrors')!.addEventListener('change', event => {
+  view.mirrors = (event.target as HTMLSelectElement).value as ViewSettings['mirrors'];
+  saveView();
+});
+document.querySelector('#default-view')!.addEventListener('click', () => {
+  view = { ...DEFAULT_VIEW };
+  renderViewSettings();
+  saveView();
+});
+document.querySelector('#close-view')!.addEventListener('click', () => viewDialog.close());
+viewDialog.addEventListener('close', () => {
+  suspended = false;
+  interrupt();
+  canvas.focus({ preventScroll: true });
+});
 document.querySelector('#settings')!.addEventListener('click', () => {
   suspended = true;
   interrupt();
@@ -214,6 +268,12 @@ function updateControlDisplay() {
   const hornText = car.horn ? 'HORN ACTIVE' : 'Horn ready · sound in phase 11';
   if (hornState.textContent !== hornText) hornState.textContent = hornText;
   document.querySelector('#switch-state')!.textContent = `${car.parkingBrake ? 'Parking brake ON' : 'Parking brake OFF'} · Lights ${car.headlights ? 'ON' : 'OFF'}`;
+  const look = driverInput.lookSnapshot();
+  for (const button of document.querySelectorAll<HTMLElement>('.look-controls [data-drive]')) {
+    const active = button.dataset.drive === 'lookLeft' ? look.left : button.dataset.drive === 'lookRight' ? look.right : look.back;
+    button.setAttribute('aria-pressed', String(active));
+  }
+  document.querySelector('#view-state')!.textContent = look.back ? 'Looking back' : look.left && !look.right ? 'Left shoulder' : look.right && !look.left ? 'Right shoulder' : 'Looking forward';
 }
 
 function drawMap() {
@@ -284,6 +344,7 @@ async function start() {
     lastTime = time;
     if (document.hidden || suspended || windowBlurred || lostContext) { clock.reset(); return; }
     const input = driverInput.snapshot();
+    headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
     clock.advance(dt, step => physics!.step(input, step));
     const damage = physics!.damage;
     const impacts = damage.drainEvents().filter(event => event.kind === 'impact');
@@ -311,9 +372,12 @@ async function start() {
     }
     speed.textContent = String(Math.round(Math.abs(car.speed) * 2.236936));
     gear.textContent = car.selectedGear === 'D' ? `D${car.gear}` : car.selectedGear;
+    document.querySelector('#rpm')!.textContent = `${(car.engineRpm / 1000).toFixed(1)}k RPM`;
+    document.querySelector<HTMLMeterElement>('#throttle-meter')!.value = car.throttle;
+    document.querySelector<HTMLMeterElement>('#brake-meter')!.value = car.brake;
     updateControlDisplay();
     status.textContent = physics!.needsRecovery ? 'PRESS R TO RECOVER' : car.selectedGear === 'P' ? 'PARK · SELECT DRIVE TO BEGIN' : car.parkingBrake ? 'PARKING BRAKE ON' : Math.abs(car.speed) < 0.05 ? 'READY WHEN YOU ARE' : !isOnRoad(car.x, car.z) ? 'OFF THE BEATEN PATH' : car.speed < 0 ? 'TAKING A STEP BACK' : 'A LITTLE FURTHER FROM HURRY';
-    scene.render(car, physics!);
+    scene.render(car, physics!, view, headLook.yaw, time);
     drawMap();
   }
   requestAnimationFrame(frame);

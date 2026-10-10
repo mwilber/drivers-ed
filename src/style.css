@@ -166,3 +166,58 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
   .driver-panel button { padding: 5px; }
   .map-panel { display: none; }
 }
+
+#mirrors { position: absolute; top: 82px; left: 50%; transform: translateX(-50%); width: min(550px, calc(100% - 36px)); display: flex; gap: 8px; pointer-events: none; }
+#mirrors[hidden] { display: none; }
+.mirror-view { position: relative; flex: 1; aspect-ratio: 2; border: 3px solid #273332; border-radius: 7px; overflow: hidden; }
+.mirror-view span { position: absolute; bottom: 0; left: 0; right: 0; padding: 3px; background: #192a23b8; color: #edf1e7; text-align: center; font-size: 7px; letter-spacing: 1px; }
+.look-controls { position: absolute; left: 50%; transform: translateX(-50%); bottom: 222px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; width: 290px; padding: 7px; border-radius: 9px; background: #f3f3e9e8; }
+.look-controls button { font-size: 10px; border: 1px solid #98aa94; border-radius: 5px; padding: 5px 8px; background: #f9faf5; color: #284b3d; cursor: pointer; }
+.look-controls [data-drive] { touch-action: none; user-select: none; }
+.look-controls button[aria-pressed="true"], .look-controls button.pressed { background: #284b3d; color: #fff; }
+.look-controls kbd { font-size: 8px; height: 17px; min-width: 17px; }
+#view-state { font-size: 9px; margin-right: 6px; }
+.engine-instruments { font-size: 9px; min-width: 75px; display: grid; gap: 3px; }
+.engine-instruments label { display: flex; justify-content: space-between; gap: 4px; font-size: 7px; }
+.engine-instruments meter { width: 45px; height: 9px; }
+#view-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; width: min(470px, calc(100vw - 32px)); border: 1px solid #98aa94; border-radius: 14px; padding: 22px; background: #f3f3e9; color: #263d32; }
+#view-dialog::backdrop { background: #14251e88; }
+#view-dialog h2 { font-size: 25px; }
+#view-dialog p { font-size: 12px; line-height: 1.5; }
+#view-dialog label { display: flex; align-items: center; justify-content: space-between; font-size: 12px; gap: 10px; margin-top: 15px; }
+#view-dialog input[type="range"], #view-dialog select { width: 100%; accent-color: #284b3d; margin-top: 7px; }
+#view-dialog .view-check { justify-content: flex-start; }
+#view-dialog .setting-hint { margin: 4px 0; font-size: 10px; color: #5c6b60; }
+#view-dialog button, #view-dialog select { font: inherit; border: 1px solid #98aa94; border-radius: 5px; background: #f9faf5; color: #284b3d; padding: 7px 9px; cursor: pointer; }
+#notice { top: 184px; z-index: 2; }
+@media (max-width: 1100px) and (min-width: 601px) {
+  #mirrors { width: 390px; }
+  .location { top: 160px; }
+  .map-panel { top: 160px; }
+}
+@media (max-width: 720px) {
+  .look-controls { top: 151px; bottom: auto; }
+}
+@media (max-width: 600px) {
+  #mirrors { top: 70px; width: min(390px, calc(100% - 36px)); gap: 5px; }
+  .mirror-view { border-width: 2px; }
+  .mirror-view span { font-size: 5px; letter-spacing: 0.3px; padding: 2px; }
+  .look-controls { top: 137px; width: calc(100% - 36px); padding: 5px; }
+  .look-controls button { font-size: 9px; padding: 4px 5px; }
+  #view-state { display: none; }
+  .damage-panel, .map-panel { top: 193px; }
+  #notice { top: 172px; font-size: 9px; max-width: calc(100% - 24px); white-space: normal; text-align: center; }
+  .instrument { padding: 7px 9px; gap: 9px; }
+  .engine-instruments { min-width: 62px; }
+  .engine-instruments meter { width: 34px; }
+}
+@media (min-width: 601px) and (max-width: 720px) and (min-height: 551px) {
+  .damage-panel, .map-panel { top: 240px; bottom: auto; }
+}
+@media (max-height: 550px) and (min-width: 601px) {
+  #mirrors { top: 65px; width: 330px; }
+  .look-controls { top: 130px; bottom: auto; width: 300px; padding: 5px; }
+  .look-controls button { padding: 3px 5px; }
+  #view-state { display: none; }
+  .location { display: none; }
+}

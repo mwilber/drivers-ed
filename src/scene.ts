@@ -4,6 +4,7 @@ import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { indicatorLit, type CarState } from './simulation.ts';
 import type { VehiclePhysics } from './vehicle-physics.ts';
 import { CAR, SUSPENSION } from './vehicle-config.ts';
+import { MIRRORS, MIRROR_BUDGET, MirrorSchedule, mirrorGeometry, placeDriverCamera, placeMirrorCamera, type ViewSettings } from './cockpit.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
 
 const materials = new Map<number, THREE.MeshStandardMaterial>();
@@ -180,18 +181,32 @@ export function createScene(canvas: HTMLCanvasElement) {
   box(steeringWheel, 0.105, 0.072, 0.05, 0, 0, 0.015, 0x26322f);
 
   const camera = new THREE.PerspectiveCamera(68, 1, 0.035, 900);
-  camera.position.set(-0.38, CAR.eyeHeight, 0.38);
-  camera.rotation.x = -0.035;
-  car.add(camera);
+  scene.add(camera);
+  const mirrorScene = new THREE.Scene();
+  const mirrorOverlay = new THREE.OrthographicCamera(0, window.innerWidth, window.innerHeight, 0, -1, 1);
+  const mirrorSchedule = new MirrorSchedule();
+  const mirrors = MIRRORS.map(definition => {
+    const target = new THREE.WebGLRenderTarget(1, 1, { generateMipmaps: false });
+    const geometry = mirrorGeometry();
+    const surface = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: target.texture, depthTest: false, depthWrite: false, toneMapped: false }));
+    mirrorScene.add(surface);
+    return { definition, target, surface, camera: new THREE.PerspectiveCamera(definition.fov, 2, 0.1, 220), element: document.querySelector<HTMLElement>(`#mirror-${definition.id}`)! };
+  });
+  const position = new THREE.Vector3();
+  const rotation = new THREE.Quaternion();
+  const mirrorStrip = document.querySelector<HTMLElement>('#mirrors')!;
   function resize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    mirrorOverlay.right = window.innerWidth;
+    mirrorOverlay.top = window.innerHeight;
+    mirrorOverlay.updateProjectionMatrix();
   }
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState, physics: VehiclePhysics) {
+    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number) {
       damageVisuals.update(physics.damage);
       for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
       for (const beam of headlightBeams) beam.intensity = state.headlights ? 900 : 0;
@@ -206,7 +221,38 @@ export function createScene(canvas: HTMLCanvasElement) {
         wheel.children[0]!.rotation.x = pose.rotation;
       }
       steeringWheel.rotation.z = state.steering * 2.8;
+      position.copy(physics.position);
+      rotation.copy(physics.rotation);
+      placeDriverCamera(camera, position, rotation, state.heading, view, headYaw);
+      // Main pass updates shadows once. Mirror passes reuse them and omit the player's shell.
       renderer.render(scene, camera);
+      mirrorStrip.hidden = view.mirrors === 'off';
+      if (view.mirrors === 'off') return;
+      if (mirrorSchedule.due(time, view.mirrors)) {
+        const budget = MIRROR_BUDGET[view.mirrors];
+        renderer.shadowMap.autoUpdate = false;
+        chassis.visible = false;
+        try {
+          for (const mirror of mirrors) {
+            if (mirror.target.width !== budget.width) mirror.target.setSize(budget.width, budget.height);
+            placeMirrorCamera(mirror.camera, mirror.definition, position, rotation);
+            renderer.setRenderTarget(mirror.target);
+            renderer.render(scene, mirror.camera);
+          }
+        } finally {
+          chassis.visible = true;
+          renderer.setRenderTarget(null);
+          renderer.shadowMap.autoUpdate = true;
+        }
+      }
+      for (const mirror of mirrors) {
+        const rect = mirror.element.getBoundingClientRect();
+        mirror.surface.position.set(rect.left + rect.width / 2, window.innerHeight - rect.top - rect.height / 2, 0);
+        mirror.surface.scale.set(rect.width, rect.height, 1);
+      }
+      renderer.autoClear = false;
+      renderer.render(mirrorScene, mirrorOverlay);
+      renderer.autoClear = true;
     },
   };
 }

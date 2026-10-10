@@ -144,7 +144,7 @@ test('bindings round-trip, reject conflicts and reserved keys, clear held source
   assert.ok(input.remap('horn', 'Escape'));
   assert.equal(input.actionForKey('Space'), 'horn');
   input.press('key:Space', 'horn');
-  assert.equal(input.remap('horn', 'KeyJ'), undefined);
+  assert.equal(input.remap('horn', 'KeyU'), undefined);
   assert.equal(input.snapshot().horn, false);
   assert.equal(input.actionForKey('Space'), undefined);
   const restored = new DriverInput();
@@ -152,7 +152,7 @@ test('bindings round-trip, reject conflicts and reserved keys, clear held source
   assert.deepEqual(restored.bindings, input.bindings);
   for (const corrupt of ['invalid', '{}', '{"version":2}', JSON.stringify({ version: 1, bindings: { ...DEFAULT_BINDINGS, horn: ['KeyW'] } })]) {
     restored.load(corrupt);
-    assert.equal(restored.actionForKey('KeyJ'), 'horn');
+    assert.equal(restored.actionForKey('KeyU'), 'horn');
   }
   restored.restoreDefaults();
   assert.deepEqual(restored.bindings, DEFAULT_BINDINGS);

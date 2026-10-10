@@ -12,11 +12,23 @@
       <canvas id="world" tabindex="0" aria-label="First-person driving simulator showing a suburban neighborhood"></canvas>
       <header class="topbar">
         <div class="identity"><span class="brand-mark" aria-hidden="true">d<span>e</span></span><div><h1>Drivers Ed<span class="brand-dot">.</span></h1><p>A little room to learn.</p></div></div>
-        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 05</span></div>
+        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 06</span></div>
       </header>
       <section class="location" aria-label="Current environment"><span class="eyebrow">THE NEIGHBORHOOD</span><h2>Take the long way.</h2><p>A quiet block. An open road. Your own pace.</p></section>
       <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="320" aria-label="Map showing the car and rectangular streets"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
       <div id="notice" role="status"></div>
+      <aside id="mirrors" aria-label="Rear-facing mirrors, horizontally reflected">
+        <div id="mirror-left" class="mirror-view" role="img" aria-label="Left side mirror"><span>LEFT MIRROR</span></div>
+        <div id="mirror-rear" class="mirror-view" role="img" aria-label="Interior rearview mirror"><span>REARVIEW</span></div>
+        <div id="mirror-right" class="mirror-view" role="img" aria-label="Right side mirror"><span>RIGHT MIRROR</span></div>
+      </aside>
+      <aside class="look-controls" aria-label="Head movement">
+        <button type="button" data-drive="lookLeft" aria-pressed="false" aria-label="Hold to check left shoulder">← <kbd data-binding-label="lookLeft">J</kbd></button>
+        <button type="button" data-drive="lookBack" aria-pressed="false" aria-label="Hold to look back">Back <kbd data-binding-label="lookBack">K</kbd></button>
+        <button type="button" data-drive="lookRight" aria-pressed="false" aria-label="Hold to check right shoulder"><kbd data-binding-label="lookRight">L</kbd> →</button>
+        <span id="view-state">Looking forward</span>
+        <button type="button" id="view-settings">View settings</button>
+      </aside>
       <aside class="damage-panel" aria-label="Vehicle damage and repair">
         <div class="damage-heading">SEDAN CONDITION <span id="damage-condition" role="status">Undamaged</span></div>
         <div class="damage-body"><div class="damage-diagram" aria-label="Damage by body panel"><span data-panel="front">Front</span><span data-panel="left">Left</span><span data-panel="roof">Roof</span><span data-panel="right">Right</span><span data-panel="rear">Rear</span></div><p id="damage-effects">Original handling</p></div>
@@ -48,12 +60,31 @@
         <p id="binding-message" role="status">The accelerator follows the selected gear. The brake always stops the car. Stop before selecting P, R, or D.</p>
         <div class="binding-actions"><button id="default-bindings" type="button">Restore defaults</button><button id="close-bindings" type="button">Return to driving</button></div>
       </dialog>
+      <dialog id="view-dialog" aria-labelledby="view-title">
+        <h2 id="view-title">Cockpit view</h2>
+        <p>Adjust your sightline. Hold the shoulder or back controls to look around; release to face forward. Driving pauses while settings are open.</p>
+        <label for="view-fov">Field of view <output id="value-fov" for="view-fov"></output></label>
+        <input id="view-fov" type="range" min="55" max="90" step="1" />
+        <label for="view-eyeHeight">Eye height <output id="value-eyeHeight" for="view-eyeHeight"></output></label>
+        <input id="view-eyeHeight" type="range" min="1.12" max="1.38" step="0.01" />
+        <label for="view-seatZ">Seat distance back <output id="value-seatZ" for="view-seatZ"></output></label>
+        <input id="view-seatZ" type="range" min="0.18" max="0.55" step="0.01" />
+        <label class="view-check"><input id="view-followBody" type="checkbox" /> Follow chassis pitch and roll</label>
+        <p class="setting-hint">Turn off for a level horizon. The seat still follows the car's position.</p>
+        <label class="view-check"><input id="view-smoothLook" type="checkbox" /> Smooth head turns</label>
+        <p class="setting-hint">Turn off for instant shoulder checks. No extra camera shake is added.</p>
+        <label for="view-mirrors">Mirror rendering</label>
+        <select id="view-mirrors"><option value="standard">Standard · 512 × 256 · up to 30 Hz</option><option value="low">Low · 256 × 128 · up to 15 Hz</option><option value="off">Off</option></select>
+        <p>Mirrors show rear and adjacent scenery. Use shoulder checks for blind spots. Side mirrors use a wider view, so apparent distance differs.</p>
+        <p id="view-message" role="status">Preferences save on this device when browser storage is available.</p>
+        <div class="binding-actions"><button id="default-view" type="button">Restore defaults</button><button id="close-view" type="button">Return to driving</button></div>
+      </dialog>
       <footer class="bottom-panel">
         <div class="drive-status"><span class="live-dot"></span><span id="drive-status">READY WHEN YOU ARE</span></div>
         <div class="controls" aria-label="Driving controls"><span><kbd data-binding-label="forward">W / ↑</kbd> Accelerator</span><span><kbd data-binding-label="reverse">S / ↓</kbd> Brake</span><span><kbd data-binding-label="left">A / ←</kbd><kbd data-binding-label="right">D / →</kbd> Steer</span><button id="reset" type="button" title="Return to the starting position"><span aria-hidden="true">↺</span> Reset <kbd data-binding-label="reset">R</kbd></button><button id="test-area" type="button" title="Move the car to the suspension test area">Test area ↗</button></div>
         <div class="build-label">EXPLORATION, AT YOUR PACE.</div>
       </footer>
-      <div class="instrument" aria-label="Vehicle instruments"><span id="gear">P</span><div><span id="speed">0</span><span class="speed-unit">MPH</span></div><span class="automatic">AUTO</span></div>
+      <div class="instrument" aria-label="Vehicle instruments"><span id="gear">P</span><div><span id="speed">0</span><span class="speed-unit">MPH</span></div><div class="engine-instruments"><span id="rpm">0.9k RPM</span><label>Power <meter id="throttle-meter" min="0" max="1" value="0" aria-label="Engine throttle"></meter></label><label>Brake <meter id="brake-meter" min="0" max="1" value="0" aria-label="Service brake force"></meter></label></div></div>
       <div class="touch-controls" aria-label="Touch driving controls"><div><button data-drive="left" aria-label="Steer left">←</button><button data-drive="right" aria-label="Steer right">→</button></div><div><button data-drive="reverse" aria-label="Brake">↓</button><button data-drive="forward" aria-label="Accelerator">↑</button></div></div>
       <div id="error" role="alert" hidden><h2>Unable to start the simulator</h2><p id="error-message"></p></div>
     </main>
