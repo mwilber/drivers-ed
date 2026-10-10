@@ -126,11 +126,22 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 - Introduce wheel contact, suspension, body pitch and roll, slopes, and curb traversal in a small test area.
 - Replace stop-on-contact behavior with appropriate collision response, including glancing impacts and recovery from getting stuck.
-- Evaluate whether a physics library is needed; seek approval before adopting one. Defer cosmetic damage.
+- Evaluate whether a physics library is needed; seek approval before adopting one. Defer car damage to Phase 4.
 
 **Testing checkpoint:** The car remains stable on flat ground, slopes, and curbs; cannot pass through obstacles at supported speeds; and can recover or reset without invalid state.
 
-### Phase 4 — Driver controls
+### Phase 4 — Car damage and repair
+
+**Focus:** Make collisions produce understandable, persistent damage to the player's sedan, building on the validated collision response.
+
+- Track impact severity and location from collision events, distinguishing minor scrapes from stronger impacts and avoiding repeated damage from resting contact.
+- Add visible body damage with placeholder dents, scratches, and damaged panels before investing in detailed crash deformation or finished vehicle art.
+- Introduce bounded effects on steering, suspension, or propulsion for heavier damage, with clear dashboard feedback. Make handling damage configurable so free driving and baseline handling checks remain available.
+- Keep damage until repair or reset; both neighborhood and test-area resets restore an undamaged, driveable car. Expose impact and scrape events for the driving audio phase.
+
+**Testing checkpoint:** Repeatable impacts produce consistent damage appropriate to severity and location across rendering frame rates. Glancing scrapes, repeated impacts, and sustained resting contact behave correctly; damage effects stay stable; repair and reset restore original appearance and handling without stale state.
+
+### Phase 5 — Driver controls
 
 **Focus:** Complete the sedan's basic operating controls while keeping automatic shifting.
 
@@ -140,7 +151,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Each control has a clear effect and visible state; unsafe direction changes are handled consistently; no input remains stuck after interruption.
 
-### Phase 5 — Cockpit visibility and instruments
+### Phase 6 — Cockpit visibility and instruments
 
 **Focus:** Give the driver the information and sightlines needed for realistic maneuvers.
 
@@ -150,7 +161,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Drivers can judge lane position, reverse, and check surrounding traffic positions. Mirrors show the correct views and remain within the agreed rendering budget.
 
-### Phase 6 — Streets and traffic rules
+### Phase 7 — Streets and traffic rules
 
 **Focus:** Turn the existing neighborhood into a consistent road network.
 
@@ -160,7 +171,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Road markings, collision geometry, lane connections, and signal states agree. Every route and intersection can be driven manually without ambiguous or impossible geometry.
 
-### Phase 7 — Vehicle traffic
+### Phase 8 — Vehicle traffic
 
 **Focus:** Add predictable AI drivers on the validated road network.
 
@@ -170,7 +181,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Vehicles maintain spacing, yield as intended, and complete routes without routine collisions or deadlocks. Test player interference and performance as traffic density increases.
 
-### Phase 8 — Pedestrians and cyclists
+### Phase 9 — Pedestrians and cyclists
 
 **Focus:** Add interactions with vulnerable road users separately from vehicle traffic development.
 
@@ -180,7 +191,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Crossing, yielding, and stopping behavior works in repeatable encounters, including partial occlusion and a player who fails to yield.
 
-### Phase 9 — Lighting, weather, and surface conditions
+### Phase 10 — Lighting, weather, and surface conditions
 
 **Focus:** Vary driving conditions after dry-road behavior is stable.
 
@@ -190,17 +201,17 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Changes in visibility and stopping distance are consistent and measurable. Lighting, mirrors, and weather effects remain usable at the target frame rate.
 
-### Phase 10 — Driving audio
+### Phase 11 — Driving audio
 
 **Focus:** Provide sound that communicates the vehicle's behavior and surroundings.
 
-- Add engine and transmission response, tire and surface sounds, indicators, the horn, and restrained environmental audio.
-- Connect sounds to simulation state, with appropriate spatial positioning and volume controls.
+- Add engine and transmission response, tire and surface sounds, indicators, the horn, collision impacts, body scrapes, and restrained environmental audio.
+- Connect sounds to simulation state and the damage phase's impact and scrape events, scaling collision sounds by severity and material without retriggering them continuously during resting contact. Use appropriate spatial positioning and volume controls.
 - Handle browser audio activation, muting, and pause/resume behavior.
 
-**Testing checkpoint:** Sounds track acceleration, speed, surfaces, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused.
+**Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds.
 
-### Phase 11 — World expansion and visual detail
+### Phase 12 — World expansion and visual detail
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 
@@ -210,7 +221,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** New areas remain navigable by both player and traffic. Visual changes preserve sightlines and collision alignment, and larger scenes stay within memory and frame-time targets.
 
-### Phase 12 — Optional practice and feedback
+### Phase 13 — Optional practice and feedback
 
 **Focus:** Support learning without turning the open sandbox into a mandatory progression system.
 
@@ -220,7 +231,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Exercises detect success and mistakes consistently, explain feedback clearly, and can be entered or exited without disrupting sandbox play. Saved data survives reloads and handles older formats safely.
 
-### Phase 13 — Browser compatibility and release readiness
+### Phase 14 — Browser compatibility and release readiness
 
 **Focus:** Stabilize the complete agreed feature set for regular play.
 
