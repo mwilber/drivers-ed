@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createDamageVisuals } from './damage-visuals.ts';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import type { CarState } from './simulation.ts';
 import type { VehiclePhysics } from './vehicle-physics.ts';
@@ -122,9 +123,8 @@ export function createScene(canvas: HTMLCanvasElement) {
   chassis.add(car);
   // A blank sedan with a hood, cabin frame, dashboard, and simple steering wheel.
   const paint = 0xc8cec8;
-  box(car, CAR.width, 0.42, CAR.length, 0, 0.51, 0, paint);
-  box(car, 1.72, 0.17, 1.3, 0, 0.81, -1.54, paint);
-  box(car, 1.73, 0.1, 1.95, 0, 1.62, 0.35, paint);
+  const damageVisuals = createDamageVisuals();
+  car.add(damageVisuals.group);
   const headliner = box(car, 1.7, 0.01, 1.92, 0, 1.565, 0.35, paint);
   headliner.material = new THREE.MeshBasicMaterial({ color: 0xc7cec0 });
   box(car, 0.09, 0.32, 1.7, -0.86, 0.89, 0.28, 0x313b3c);
@@ -172,6 +172,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   window.addEventListener('resize', resize);
   return {
     render(state: CarState, physics: VehiclePhysics) {
+      damageVisuals.update(physics.damage);
       chassis.position.copy(physics.position);
       chassis.quaternion.copy(physics.rotation);
       for (let i = 0; i < wheelMeshes.length; i++) {

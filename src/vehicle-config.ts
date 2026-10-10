@@ -21,6 +21,20 @@ export const SUSPENSION = {
   sideStiffness: 1,
 } as const;
 
+/** Authored game damage thresholds, not a real crash or safety model. */
+export const DAMAGE = {
+  minimumImpactSpeed: 1.2,
+  heavyImpactSpeed: 5,
+  fullSeveritySpeed: 18,
+  impactCooldown: 0.3,
+  minimumScrapeSpeed: 0.8,
+  scratchPerMetre: 0.012,
+  scrapeEventInterval: 0.25,
+  maximumPowerLoss: 0.35,
+  maximumSteeringBias: 0.055,
+  maximumSuspensionLoss: 0.25,
+} as const;
+
 export const HANDLING = {
   gravity: 9.81,
   forwardSpeedLimit: 51.4096, // 115 mph governor; drag puts sustained speed slightly below it.

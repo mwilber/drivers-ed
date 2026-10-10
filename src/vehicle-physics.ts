@@ -3,10 +3,11 @@ import { createCar, stopCar, updateDriveForces, type DrivingInput } from './simu
 import { CAR, HANDLING, SUSPENSION } from './vehicle-config.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, isOnRoad, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TREES } from './world-layout.ts';
 import { FIXED_STEP } from './simulation-clock.ts';
+import { VehicleDamage, type DamageContact } from './vehicle-damage.ts';
 
 export interface PhysicsBox { x: number; y: number; z: number; width: number; height: number; depth: number }
 export interface Spawn { x: number; z: number; heading: number }
-export interface PhysicsOptions { environment?: 'neighborhood' | 'flat'; spawn?: Spawn; boxes?: readonly PhysicsBox[] }
+export interface PhysicsOptions { environment?: 'neighborhood' | 'flat'; spawn?: Spawn; boxes?: readonly PhysicsBox[]; damageHandling?: boolean }
 export interface WheelPose { x: number; y: number; z: number; steering: number; rotation: number; contact: boolean; suspensionLength: number }
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
@@ -29,6 +30,9 @@ export class VehiclePhysics {
   readonly state = createCar();
   readonly wheels: WheelPose[] = [];
   readonly options: PhysicsOptions;
+  readonly damage = new VehicleDamage();
+  private readonly eventQueue = new RAPIER.EventQueue(true);
+  private readonly colliderMaterials = new Map<number, string>();
   body!: RAPIER.RigidBody;
   vehicle!: RAPIER.DynamicRayCastVehicleController;
   position = { x: 0, y: 0, z: 0 };
@@ -38,19 +42,21 @@ export class VehiclePhysics {
 
   constructor(options: PhysicsOptions) {
     this.options = options;
+    this.damage.handlingEnabled = options.damageHandling ?? true;
     this.world = new RAPIER.World({ x: 0, y: -HANDLING.gravity, z: 0 });
     this.world.timestep = FIXED_STEP;
     this.world.numSolverIterations = 8;
-    this.addBox({ x: 0, y: (options.environment === 'flat' ? ROAD_HEIGHT : 0) - 0.5, z: 0, width: 20000, height: 1, depth: 20000 });
+    this.addBox({ x: 0, y: (options.environment === 'flat' ? ROAD_HEIGHT : 0) - 0.5, z: 0, width: 20000, height: 1, depth: 20000 }, options.environment === 'flat' ? 'asphalt' : 'soil');
     if (options.environment !== 'flat') {
-      for (const rect of [...PAVED_SURFACES, ...DRIVEWAYS]) this.addBox({ ...rect, y: ROAD_HEIGHT / 2, height: ROAD_HEIGHT });
+      for (const rect of [...PAVED_SURFACES, ...DRIVEWAYS]) this.addBox({ ...rect, y: ROAD_HEIGHT / 2, height: ROAD_HEIGHT }, 'asphalt');
       for (const rect of SIDEWALKS) this.addBox({ ...rect, y: SIDEWALK_HEIGHT / 2, height: SIDEWALK_HEIGHT });
-      for (const house of HOUSES) this.addBox({ ...house, y: house.height / 2 });
+      for (const house of HOUSES) this.addBox({ ...house, y: house.height / 2 }, 'masonry');
       for (const tree of TREES) {
-        this.world.createCollider(RAPIER.ColliderDesc.cylinder(1.75 * tree.size, 0.29 * tree.size)
+        const collider = this.world.createCollider(RAPIER.ColliderDesc.cylinder(1.75 * tree.size, 0.29 * tree.size)
           .setTranslation(tree.x, 1.75 * tree.size, tree.z).setFriction(0.6));
+        this.colliderMaterials.set(collider.handle, 'wood');
       }
-      for (const obstacle of BOUNDARY_OBSTACLES) this.addBox({ ...obstacle, y: 0.8, width: obstacle.halfWidth * 2, height: 1.6, depth: obstacle.halfDepth * 2 });
+      for (const obstacle of BOUNDARY_OBSTACLES) this.addBox({ ...obstacle, y: 0.8, width: obstacle.halfWidth * 2, height: 1.6, depth: obstacle.halfDepth * 2 }, 'hedge');
       this.world.createCollider(RAPIER.ColliderDesc.convexHull(rampVertices())!.setFriction(0.9));
       this.addBox({ ...TEST_CURB, y: ROAD_HEIGHT + TEST_CURB.height / 2 });
     }
@@ -59,12 +65,15 @@ export class VehiclePhysics {
     this.reset();
   }
 
-  private addBox(box: PhysicsBox): void {
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(box.width / 2, box.height / 2, box.depth / 2)
+  private addBox(box: PhysicsBox, surface = 'concrete'): void {
+    const collider = this.world.createCollider(RAPIER.ColliderDesc.cuboid(box.width / 2, box.height / 2, box.depth / 2)
       .setTranslation(box.x, box.y, box.z).setFriction(0.9).setRestitution(0));
+    this.colliderMaterials.set(collider.handle, surface);
   }
 
   reset(spawn: Spawn = this.options.spawn ?? createCar()): void {
+    this.damage.repair();
+    this.eventQueue.clear();
     if (this.vehicle) this.world.removeVehicleController(this.vehicle);
     if (this.body) this.world.removeRigidBody(this.body);
     Object.assign(this.state, createCar(), spawn);
@@ -75,9 +84,11 @@ export class VehiclePhysics {
       .setRotation({ x: 0, y: Math.sin(spawn.heading / 2), z: 0, w: Math.cos(spawn.heading / 2) })
       .setCcdEnabled(true).setAngularDamping(0.3).setAdditionalSolverIterations(4));
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(CAR.width / 2, 0.21, CAR.length / 2)
-      .setTranslation(0, 0.51 - SUSPENSION.centerOfMassHeight, 0).setMass(CAR.mass).setFriction(0.25).setRestitution(0), this.body);
+      .setTranslation(0, 0.51 - SUSPENSION.centerOfMassHeight, 0).setMass(CAR.mass).setFriction(0.25).setRestitution(0)
+      .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS), this.body);
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.82, 0.4, 0.88)
-      .setTranslation(0, 1.17 - SUSPENSION.centerOfMassHeight, 0.28).setMass(0).setFriction(0.25), this.body);
+      .setTranslation(0, 1.17 - SUSPENSION.centerOfMassHeight, 0.28).setMass(0).setFriction(0.25)
+      .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS), this.body);
     this.vehicle = this.world.createVehicleController(this.body);
     this.vehicle.indexUpAxis = 1;
     this.vehicle.setIndexForwardAxis = 2;
@@ -112,22 +123,80 @@ export class VehiclePhysics {
     const previousSpeed = this.state.speed;
     const onRoad = this.options.environment === 'flat' || isOnRoad(this.state.x, this.state.z);
     const { driveAcceleration, resistance } = updateDriveForces(this.state, input, dt, onRoad);
-    const engineForce = Math.sign(this.state.gear) * Math.max(0, driveAcceleration - resistance) * CAR.mass / 4;
+    const effects = this.damage.effects;
+    const engineForce = Math.sign(this.state.gear) * Math.max(0, driveAcceleration - resistance) * CAR.mass / 4 * effects.power;
     const brakingImpulse = Math.max(0, resistance - driveAcceleration) * CAR.mass * dt / 4;
     for (let i = 0; i < 4; i++) {
       const contact = this.vehicle.wheelContactPoint(i);
       const paved = this.options.environment === 'flat' || (contact ? isOnRoad(contact.x, contact.z) : onRoad);
       this.vehicle.setWheelFrictionSlip(i, SUSPENSION.tireFriction * (paved ? 1 : HANDLING.grassGrip / HANDLING.dryGrip));
-      this.vehicle.setWheelSteering(i, i < 2 ? this.state.steering : 0);
+      this.vehicle.setWheelSteering(i, i < 2 ? this.state.steering + effects.steeringBias : 0);
+      this.vehicle.setWheelSuspensionStiffness(i, SUSPENSION.stiffness * effects.suspension[i]!);
+      this.vehicle.setWheelSuspensionCompression(i, SUSPENSION.compression * effects.suspension[i]!);
+      this.vehicle.setWheelSuspensionRelaxation(i, SUSPENSION.relaxation * effects.suspension[i]!);
       // Rapier's wheel forward axis is +Z; the sedan faces local -Z.
       this.vehicle.setWheelEngineForce(i, -engineForce);
       this.vehicle.setWheelBrake(i, brakingImpulse);
     }
     this.body.wakeUp();
     this.vehicle.updateVehicle(dt, undefined, undefined, collider => collider.parent()?.handle !== this.body.handle);
-    this.world.step();
+    // Capture contact-point approach velocity before the collision solver changes it.
+    const velocity = this.body.linvel(), angular = this.body.angvel();
+    this.world.step(this.eventQueue);
+    this.recordDamage(velocity, angular, dt);
     this.sync();
     this.state.acceleration = (this.state.speed - previousSpeed) / dt;
+  }
+
+  private recordDamage(velocity: RAPIER.Vector, angular: RAPIER.Vector, dt: number): void {
+    const samples = new Map<number, DamageContact>();
+    const position = this.body.translation(), rotation = this.body.rotation();
+    const inverse = { x: -rotation.x, y: -rotation.y, z: -rotation.z, w: rotation.w };
+    this.eventQueue.drainContactForceEvents(event => {
+      const first = this.world.getCollider(event.collider1()), second = this.world.getCollider(event.collider2());
+      const car = first.parent()?.handle === this.body.handle ? first : second;
+      const other = car === first ? second : first;
+      if (car.parent()?.handle !== this.body.handle || other.parent()?.handle === this.body.handle) return;
+      const impulse = event.totalForceMagnitude() * dt;
+      this.world.contactPair(car, other, (manifold, flipped) => {
+        const raw = manifold.normal();
+        const sign = flipped ? -1 : 1;
+        const normal = { x: raw.x * sign, y: raw.y * sign, z: raw.z * sign };
+        for (let i = 0; i < manifold.numSolverContacts(); i++) {
+          const point = manifold.solverContactPoint(i);
+          if (!point || manifold.solverContactDist(i) > 0.01) continue;
+          const arm = { x: point.x - position.x, y: point.y - position.y, z: point.z - position.z };
+          const localPoint = rotate(arm, inverse);
+          const contactVelocity = {
+            x: velocity.x + angular.y * arm.z - angular.z * arm.y,
+            y: velocity.y + angular.z * arm.x - angular.x * arm.z,
+            z: velocity.z + angular.x * arm.y - angular.y * arm.x,
+          };
+          const closingSpeed = Math.max(0, dot(contactVelocity, normal));
+          const tangentSpeed = Math.sqrt(Math.max(0, dot(contactVelocity, contactVelocity) - dot(contactVelocity, normal) ** 2));
+          // Upright underside support is terrain contact, not a body scrape.
+          if (localPoint.y < -0.2 && Math.abs(dot(normal, this.up)) > 0.7 && closingSpeed < 2.5) continue;
+          const sample = { obstacle: other.handle, point, localPoint, normal, localNormal: rotate(normal, inverse), closingSpeed, tangentSpeed, impulse,
+            material: this.colliderMaterials.get(other.handle) ?? 'concrete' };
+          const previous = samples.get(other.handle);
+          if (!previous || closingSpeed > previous.closingSpeed) samples.set(other.handle, sample);
+        }
+      });
+    });
+    this.damage.update([...samples.values()], dt);
+  }
+
+  /** Restore the sedan in place, preserving its pose, velocity and selected gear. */
+  repair(): void {
+    this.damage.repair();
+    this.eventQueue.clear();
+    for (let i = 0; i < 4; i++) {
+      this.vehicle.setWheelSteering(i, i < 2 ? this.state.steering : 0);
+      this.vehicle.setWheelSuspensionStiffness(i, SUSPENSION.stiffness);
+      this.vehicle.setWheelSuspensionCompression(i, SUSPENSION.compression);
+      this.vehicle.setWheelSuspensionRelaxation(i, SUSPENSION.relaxation);
+    }
+    this.sync();
   }
 
   private sync(): void {
@@ -157,6 +226,7 @@ export class VehiclePhysics {
   }
 
   pause(): void {
+    this.damage.pause();
     stopCar(this.state);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -167,5 +237,5 @@ export class VehiclePhysics {
 
   get needsRecovery(): boolean { return this.up.y < 0.3 || this.position.y < -5; }
 
-  dispose(): void { this.world.free(); }
+  dispose(): void { this.eventQueue.free(); this.world.free(); }
 }

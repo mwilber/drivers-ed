@@ -45,11 +45,25 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
 #notice { position: absolute; left: 50%; top: 100px; transform: translate(-50%, -5px); opacity: 0; transition: opacity 0.2s, transform 0.2s; background: #f3f4e9f0; padding: 12px 20px; border-radius: 25px; font-size: 12px; pointer-events: none; }
 #notice.visible { opacity: 1; transform: translate(-50%, 0); }
 .touch-controls { display: none; }
+.damage-panel { position: absolute; left: 38px; bottom: 125px; width: 260px; padding: 13px; background: #f3f3e9ee; border: 1px solid #ffffff70; border-radius: 12px; font-size: 10px; }
+.damage-heading { display: flex; justify-content: space-between; gap: 8px; font-size: 8px; letter-spacing: 0.5px; }
+#damage-condition { color: #6c5540; letter-spacing: 0; }
+.damage-body { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.damage-diagram { display: grid; grid-template-columns: repeat(3, 1fr); width: 112px; gap: 3px; flex-shrink: 0; }
+.damage-diagram span { --damage: 0; text-align: center; padding: 5px 2px; border-radius: 3px; background: color-mix(in srgb, #b3794b calc(var(--damage) * 100%), #dce3d4); font-size: 8px; }
+[data-panel="front"], [data-panel="rear"] { grid-column: 1 / -1; }
+#damage-effects { margin: 0; font-size: 10px; line-height: 1.5; }
+.damage-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+#repair { border: 1px solid #879c86; border-radius: 5px; background: #f9faf5; color: #284b3d; font-size: 10px; padding: 5px 8px; cursor: pointer; }
+#repair:disabled { opacity: 0.45; cursor: default; }
+.damage-actions label { display: flex; align-items: center; gap: 3px; font-size: 9px; white-space: nowrap; flex-shrink: 0; }
+#damage-handling { accent-color: #284b3d; }
 #error { position: absolute; inset: 0; padding: 25px; background: #eef0e8; place-content: center; text-align: center; }
 #error:not([hidden]) { display: grid; }
 #error h2 { font-size: 28px; }
 #error p { max-width: 460px; font-size: 15px; line-height: 1.6; }
 @media (max-width: 900px) {
+  .damage-panel { left: 24px; width: 235px; }
   .topbar { padding: 22px 24px; }
   .location { left: 25px; top: 120px; }
   .map-panel { right: 24px; width: 170px; top: 113px; }
@@ -59,6 +73,13 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
   .instrument { bottom: 120px; }
 }
 @media (max-width: 600px) {
+  .damage-panel { left: 18px; bottom: 174px; width: 180px; padding: 9px; }
+  .damage-heading { font-size: 7px; }
+  .damage-diagram { width: 79px; }
+  .damage-diagram span { font-size: 7px; padding: 3px 1px; }
+  .damage-actions label { font-size: 8px; }
+  #damage-effects { font-size: 8px; }
+  #repair { font-size: 8px; padding: 4px; }
   .topbar { padding: 18px; }
   h1 { font-size: 21px; }
   .brand-mark { width: 37px; height: 37px; line-height: 32px; font-size: 23px; }
@@ -82,12 +103,15 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
   #notice { top: 72px; font-size: 10px; white-space: nowrap; }
 }
 @media (pointer: coarse) {
+  .damage-panel { bottom: 246px; }
   .touch-controls { position: absolute; bottom: 180px; left: 18px; right: 18px; display: flex; justify-content: space-between; pointer-events: none; }
   .touch-controls > div { display: flex; gap: 9px; }
   .touch-controls button { width: 48px; height: 48px; background: #f3f3e9ca; color: #284b3d; border: 1px solid #fff8; border-radius: 12px; font-size: 23px; touch-action: none; user-select: none; pointer-events: auto; }
   .touch-controls button.pressed { background: #284b3d; color: #f3f3e9; }
 }
 @media (max-height: 550px) {
+  .damage-panel { bottom: 148px; width: 205px; }
+  .damage-body { margin: 6px 0; }
   .location { top: 89px; }
   .map-panel { top: 86px; width: 135px; }
   .bottom-panel { padding-top: 10px; padding-bottom: 10px; gap: 8px; }

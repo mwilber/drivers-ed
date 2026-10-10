@@ -12,11 +12,16 @@
       <canvas id="world" aria-label="First-person driving simulator showing a suburban neighborhood"></canvas>
       <header class="topbar">
         <div class="identity"><span class="brand-mark" aria-hidden="true">d<span>e</span></span><div><h1>Drivers Ed<span class="brand-dot">.</span></h1><p>A little room to learn.</p></div></div>
-        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 03</span></div>
+        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 04</span></div>
       </header>
       <section class="location" aria-label="Current environment"><span class="eyebrow">THE NEIGHBORHOOD</span><h2>Take the long way.</h2><p>A quiet block. An open road. Your own pace.</p></section>
       <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="320" aria-label="Map showing the car and rectangular streets"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
       <div id="notice" role="status"></div>
+      <aside class="damage-panel" aria-label="Vehicle damage and repair">
+        <div class="damage-heading">SEDAN CONDITION <span id="damage-condition" role="status">Undamaged</span></div>
+        <div class="damage-body"><div class="damage-diagram" aria-label="Damage by body panel"><span data-panel="front">Front</span><span data-panel="left">Left</span><span data-panel="roof">Roof</span><span data-panel="right">Right</span><span data-panel="rear">Rear</span></div><p id="damage-effects">Original handling</p></div>
+        <div class="damage-actions"><button id="repair" type="button" title="Repair damage in place without moving the car">Repair car</button><label><input id="damage-handling" type="checkbox" checked /> Handling effects</label></div>
+      </aside>
       <footer class="bottom-panel">
         <div class="drive-status"><span class="live-dot"></span><span id="drive-status">READY WHEN YOU ARE</span></div>
         <div class="controls" aria-label="Driving controls"><span><kbd>W</kbd><kbd>↑</kbd> Forward</span><span><kbd>S</kbd><kbd>↓</kbd> Brake / reverse</span><span><kbd>A</kbd><kbd>D</kbd><span class="arrow-keys"><kbd>←</kbd><kbd>→</kbd></span> Steer</span><button id="reset" type="button" title="Return to the starting position (R)"><span aria-hidden="true">↺</span> Reset <kbd>R</kbd></button><button id="test-area" type="button" title="Move the car to the suspension test area">Test area ↗</button></div>
