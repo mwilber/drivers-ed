@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 4 adds persistent collision damage, placeholder panel dents and scratches, optional handling effects, and in-place repair to the Rapier sedan.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 5 adds explicit automatic gear selection, a parking brake, lights, indicators, a horn control, and remappable keyboard bindings to the Rapier sedan.
 
 ## Run locally
 
@@ -26,15 +26,28 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 
 | Input | Action |
 | --- | --- |
-| W / Up | Accelerate forward; brake first if reversing |
-| S / Down | Brake, then reverse while held |
+| W / Up | Accelerator in the selected Drive or Reverse gear |
+| S / Down | Service brake; takes priority over the accelerator |
 | A / Left, D / Right | Steer |
-| R / Reset button | Return to the starting position |
+| 1 / 2 / 3 / 4 | Select Park / Reverse / Neutral / Drive |
+| B | Toggle parking brake |
+| Q / E | Toggle left / right indicator; selecting the other side replaces it |
+| X | Toggle hazard lights |
+| H | Toggle headlights |
+| Space (hold) | Horn control with visible feedback; audio is planned for Phase 11 |
+| R / Reset button | Return to the starting position in Park |
+| Keyboard bindings button | Remap controls, or restore defaults |
 | Test area button | Reset upright on the approach to the suspension test ramp |
 | Repair car button | Restore appearance and handling in place, preserving position and motion |
 | Handling effects checkbox | Enable/disable damage-related handling changes; body damage remains visible |
 
-Releasing steering centers the wheel. Releasing the accelerator lets the car coast down with engine braking. Holding both direction keys brakes and holds the car at a stop. Holding the opposite direction first brakes to a complete stop, then engages that direction after a short stationary delay; releasing it cancels the pending change. Direction selection and forward shifts are automatic, with D1/D2/D3…/R/N shown on the speed display; there are no manual gears. The display retains the selected gear when stopped. Touch devices get steering and direction buttons. Switching away from the page clears input and pauses motion.
+The car starts in **Park**. Select **Drive (4)**, then hold **W** to accelerate. Stop with **S**, select **Reverse (2)**, then use **W** to back up. The brake always wins when both pedals are held. Releasing steering centers the wheel; releasing the accelerator permits coasting with engine braking in Drive/Reverse. Forward ratios shift automatically, with D1/D2/D3… shown on the speed display; there are no manual gears or automatic creep.
+
+Park and engagement of Drive/Reverse require a complete stop (below 0.03 m/s, allowing small suspension jitter). Unsafe selections are rejected with a notice and must be requested again after stopping. Drive/Reverse engagement has a 0.35-second power interlock. **Neutral (3)** can be selected while moving and allows coasting without propulsion. **Park (1)** holds the wheels. The separate parking brake also holds the wheels and cuts propulsion while engaged; it can be applied while moving and stays on until toggled off.
+
+On-screen gear and switch buttons work with mouse or touch. Touch devices also have accelerator, brake, and steering pedals. Hold the horn button with a pointer, or focus it and hold Space/Enter. Keyboard bindings shows every default and supports reassignment to letters, numbers, arrows, Shift, or Space; a conflicting binding is rejected. Assigning a new key replaces that action's default aliases. Bindings persist locally when browser storage is available, and invalid saved data falls back to defaults. Buttons and touch controls remain available after remapping. Analog controllers are deferred until requested.
+
+Window blur, hidden-page transitions, opening settings, and graphics interruption clear held pedals, steering inputs, and the horn and pause motion. Returning resumes with released controls. Focusing a form/button clears held inputs; pointer cancellation or lost capture releases its individual input. Deliberate gear, parking-brake, headlight, and indicator selections survive ordinary interruptions. Reset and Test area start in Park with switches off; Repair car preserves their state. Free driving remains available throughout.
 
 ## Phase 1
 
@@ -53,16 +66,16 @@ The reference vehicle is a fictional 1,500 kg sedan, 4.5 m long and 1.8 m wide, 
 
 - Progressive throttle and brake response, engine torque, rolling resistance, aerodynamic drag, and engine braking.
 - Six available automatic forward ratios and a reverse ratio, with shift hysteresis, brief power interruptions during shifts, and first-gear selection for launch. Sustained high-speed driving uses all six forward ratios.
-- A complete-stop interlock and 0.35-second selection delay when changing direction, followed by brake release and throttle buildup. There is no automatic creep with this simplified control scheme.
+- A complete-stop interlock and 0.35-second selection delay in the original direction-key interface. Phase 5 replaces browser direction keys with explicit P/R/N/D selection and separate accelerator/brake pedals. There is no automatic creep.
 - Rate-limited steering. Full steering lock stays available at every speed and remains held while a direction key is down. Speed reduces how quickly steering builds, rather than unwinding the held wheel; releasing the key centers it.
 - Grip-limited handling. Phase 3 now applies tire forces at each suspension contact, replacing the original planar turn limiter.
 - A 115 mph forward governor, with a measured sustained speed around 112.5 mph after drag and rolling resistance. Reverse remains limited to about 11 mph, with slower driving and greater resistance on grass.
 
-The current measurements below use the same Rapier vehicle as the browser, on an obstacle-free flat test pad in code. The neighborhood's short streets do not provide room for a full top-speed run. The stopping test starts applying the brakes at 30 mph and excludes human reaction time. The turning measurement follows the car's center path at approximately 1 m/s, rather than measuring an outer-wheel or body turning circle. Full steering lock does not guarantee a tight turn at speed: tire grip limits the trajectory.
+The current measurements below use the same Rapier vehicle and explicit controls as the browser, starting acceleration timing at Drive selection, on an obstacle-free flat test pad in code. The neighborhood's short streets do not provide room for a full top-speed run. The stopping test starts applying the brakes at 30 mph and excludes human reaction time. The turning measurement follows the car's center path at approximately 1 m/s, rather than measuring an outer-wheel or body turning circle. Full steering lock does not guarantee a tight turn at speed: tire grip limits the trajectory.
 
 | Check | Acceptance target | Current measurement |
 | --- | --- | --- |
-| 0–30 mph acceleration | 5–7 s | 5.32 s |
+| 0–30 mph acceleration | 5–7 s | 5.42 s |
 | 30–0 mph stopping distance | 12–17 m | 12.32 m |
 | 30–0 mph stopping time | 1.5–2.2 s | 1.77 s |
 | Speed after 5 s coasting from 30 mph | 22–26 mph | 23.52 mph |
@@ -101,9 +114,21 @@ The acceptance checks cover proportional light/heavy damage, front/rear/side loc
 
 This is a game damage model, not crash deformation or a real vehicle safety/calibration model. Dents affect appearance without changing collision shapes. Wheel damage is localized to the strongest sampled contact; detailed structural damage, detached parts, broken glass, finished art, and saving damage across page reloads are outside this increment.
 
+## Phase 5 — Driver controls
+
+- Explicit P/R/N/D selection retains automatic forward shifting. The accelerator follows the selected gear; the service brake never selects reverse. Brake overlap, unsafe moving selections, Neutral coasting, and the engagement delay have repeatable tests.
+- Park and the toggled parking brake use simplified wheel braking on all four wheels. The parking brake cuts propulsion immediately and remains effective with handling damage. Both hold the existing 1:10 test slope within 15 cm over eight seconds. This increment does not model a transmission pawl or a rear-axle handbrake/drifting system.
+- Left/right indicators and hazards blink on a one-second simulation-time cycle (half on, half off), visible on placeholder front/rear lamps and dashboard arrows. Indicators cancel when toggled again or replaced by the other side; automatic cancellation is deferred. Headlights switch emissive lenses and two forward spotlight beams; the world remains daytime until Phase 10.
+- The horn has a momentary held state and visible dashboard feedback. Sound is deferred to the planned driving audio phase, alongside indicator clicks and other driving sounds.
+- Keyboard and pointer sources are tracked independently. Key repeat cannot repeatedly toggle a switch; opposing steering cancels. Blur, visibility, settings, form focus, pointer cancellation, and lost capture clear the appropriate held controls. Switches persist across ordinary interruptions. No gamepad polling is introduced until analog controller support is requested.
+- The keyboard dialog lists all bindings, pauses the simulation, rejects conflicts and reserved keys, persists versioned preferences locally, and restores defaults. Reset clears operating controls; repair preserves them.
+
+Acceptance checks cover safe forward/reverse transitions, Park/Neutral propulsion lockout, braking priority, parking-brake stop/release and slope hold, overlapping device inputs, repeat suppression, interruption cleanup, binding conflicts and corrupt saved preferences, switch timing, repair/reset, and identical state at 30/60/144 Hz. The prior handling, terrain, collision, and damage regressions remain in the suite. Browser smoke checks cover gear selection and rejection, brake and switch feedback, remapping across reload, and desktop/phone-sized layouts.
+
 ## Structure
 
-- `src/simulation.ts`: Shared input and drivetrain forces plus the Phase 2 planar reference model, in metres/seconds/radians.
+- `src/simulation.ts`: Gear-selection interlocks, switch timing, shared drivetrain forces, and the Phase 2 planar reference model, in metres/seconds/radians.
+- `src/driver-input.ts`: Independent held input sources, operating switches, binding validation, and versioned preferences.
 - `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
 - `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and future audio events.
 - `src/damage-visuals.ts`: Independent placeholder body panels, dents/scratches, and restoration of original geometry and paint.
@@ -113,6 +138,7 @@ This is a game damage model, not crash deformation or a real vehicle safety/cali
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
 - `src/main.ts`: Input handling, fixed-step loop, instruments, and map.
 - `src/style.css`: Responsive interface and touch controls.
+- `tests/driver-controls.test.mjs`: Explicit pedal/selector behavior, parking hold, input overlap/interruption, bindings, switch timing, repair/reset, and frame-rate consistency.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
 - `tests/parking-lot.test.mjs`: Paved access, obstacle clearance, and complete practice circles in the parking lot.
@@ -160,7 +186,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Repeatable impacts produce consistent damage appropriate to severity and location across rendering frame rates. Glancing scrapes, repeated impacts, and sustained resting contact behave correctly; damage effects stay stable; repair and reset restore original appearance and handling without stale state.
 
-### Phase 5 — Driver controls
+### Phase 5 — Driver controls (implemented)
 
 **Focus:** Complete the sedan's basic operating controls while keeping automatic shifting.
 
@@ -168,7 +194,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Organize keyboard and touch bindings, allow remapping, and add analog controller support if requested.
 - Make input handling reliable when controls overlap, focus changes, or an input device disconnects.
 
-**Testing checkpoint:** Each control has a clear effect and visible state; unsafe direction changes are handled consistently; no input remains stuck after interruption.
+**Testing checkpoint:** Each control has a clear effect and visible state; unsafe direction changes are handled consistently; no input remains stuck after supported focus/pointer interruptions. Implemented checks are described above. Analog controllers remain request-dependent, and horn audio belongs to Phase 11.
 
 ### Phase 6 — Cockpit visibility and instruments
 

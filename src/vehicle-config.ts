@@ -41,6 +41,7 @@ export const HANDLING = {
   reverseSpeedLimit: 5,
   speedGovernorRange: 1.2,
   brakeDeceleration: 7.5,
+  parkingBrakeDeceleration: 4,
   rollingResistance: 0.012,
   aerodynamicDrag: 0.4, // Newtons per (metre/second)^2.
   engineBraking: 0.28, // Base coast deceleration in an engaged gear.
@@ -73,6 +74,8 @@ export const TRANSMISSION = {
   shiftDuration: 0.24,
   shiftCooldown: 0.8,
   directionChangeDelay: 0.35,
+  selectionStopSpeed: 0.03,
+  suspensionJitterSpeed: 0.1,
   // Engine speed (rpm), torque (Nm). Interpolate between these tuning points.
   torqueCurve: [[850, 110], [1600, 150], [3000, 180], [4500, 180], [6000, 150]],
 } as const;

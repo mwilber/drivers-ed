@@ -2,7 +2,7 @@
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: #c6dce3; }
-button { font: inherit; }
+button { font: inherit; touch-action: manipulation; }
 #world { display: block; width: 100%; height: 100%; }
 .topbar { position: absolute; inset: 0 0 auto; padding: 27px 38px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(#f3f4eebf, #f3f4ee00); pointer-events: none; }
 .identity { display: flex; align-items: center; gap: 13px; }
@@ -117,4 +117,52 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
   .bottom-panel { padding-top: 10px; padding-bottom: 10px; gap: 8px; }
   .instrument { bottom: 88px; }
   .touch-controls { bottom: 90px; }
+}
+
+.driver-panel { position: absolute; right: 38px; bottom: 125px; width: 248px; padding: 12px; border-radius: 12px; background: #f3f3e9ee; font-size: 10px; }
+.gear-selector { display: flex; gap: 6px; }
+.driver-panel button, #bindings-dialog button { border: 1px solid #98aa94; border-radius: 5px; background: #f9faf5; color: #284b3d; padding: 7px 9px; cursor: pointer; }
+.gear-selector button { flex: 1; font-weight: 600; }
+.driver-panel button[aria-pressed="true"], .driver-panel button.pressed { background: #284b3d; color: #f9faf5; }
+.driver-switches { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.driver-switches [data-drive] { touch-action: none; user-select: none; }
+.driver-panel p { font-size: 9px; margin: 9px 0; }
+.signal-state { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
+.signal-state > span:first-child, .signal-state > span:last-child { color: #a6b29e; font-size: 17px; }
+.signal-state > span.lit { color: #297637; }
+#horn-state { font-size: 8px; text-align: center; }
+#settings { width: 100%; }
+#bindings-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; width: min(470px, calc(100vw - 32px)); border: 1px solid #98aa94; border-radius: 14px; padding: 22px; background: #f3f3e9; color: #263d32; }
+#bindings-dialog::backdrop { background: #14251e88; }
+#bindings-dialog h2 { font-size: 25px; }
+#bindings-dialog p { font-size: 12px; line-height: 1.5; }
+#binding-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; align-items: center; font-size: 12px; }
+.binding-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.controls kbd { min-width: 25px; width: auto; white-space: nowrap; }
+@media (max-width: 900px) {
+  .driver-panel { right: 24px; width: 225px; }
+}
+@media (min-width: 601px) and (max-width: 720px) {
+  .location { display: none; }
+  .damage-panel { top: 113px; bottom: auto; }
+  .instrument { left: 24px; bottom: 125px; transform: none; }
+}
+@media (max-width: 600px) {
+  .location { display: none; }
+  .damage-panel { top: 100px; bottom: auto; left: 18px; width: 180px; }
+  .driver-panel { left: 18px; right: 18px; bottom: 121px; width: auto; padding: 9px; }
+  .gear-selector { width: 45%; }
+  .driver-switches { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .driver-panel button { padding: 6px; font-size: 9px; }
+  .driver-panel p { font-size: 8px; margin: 6px 0; }
+  .signal-state { position: absolute; right: 9px; top: 8px; width: 49%; margin: 0; }
+  #horn-state { font-size: 7px; }
+  .instrument { left: auto; right: 18px; transform: none; bottom: 299px; }
+  .controls > span > kbd:nth-child(2) { display: inline-grid; }
+  .touch-controls { bottom: 355px; }
+}
+@media (max-height: 550px) and (min-width: 601px) {
+  .driver-panel { bottom: 90px; padding: 8px; width: 210px; }
+  .driver-panel button { padding: 5px; }
+  .map-panel { display: none; }
 }

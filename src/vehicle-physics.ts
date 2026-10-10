@@ -1,13 +1,13 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createCar, stopCar, updateDriveForces, type DrivingInput } from './simulation.ts';
-import { CAR, HANDLING, SUSPENSION } from './vehicle-config.ts';
+import { createCar, selectGear, stopCar, updateDriveForces, type DrivingInput, type GearSelection } from './simulation.ts';
+import { CAR, HANDLING, SUSPENSION, TRANSMISSION } from './vehicle-config.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, isOnRoad, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TREES } from './world-layout.ts';
 import { FIXED_STEP } from './simulation-clock.ts';
 import { VehicleDamage, type DamageContact } from './vehicle-damage.ts';
 
 export interface PhysicsBox { x: number; y: number; z: number; width: number; height: number; depth: number }
 export interface Spawn { x: number; z: number; heading: number }
-export interface PhysicsOptions { environment?: 'neighborhood' | 'flat'; spawn?: Spawn; boxes?: readonly PhysicsBox[]; damageHandling?: boolean }
+export interface PhysicsOptions { environment?: 'neighborhood' | 'flat'; spawn?: Spawn; boxes?: readonly PhysicsBox[]; damageHandling?: boolean; explicitControls?: boolean }
 export interface WheelPose { x: number; y: number; z: number; steering: number; rotation: number; contact: boolean; suspensionLength: number }
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
@@ -77,6 +77,7 @@ export class VehiclePhysics {
     if (this.vehicle) this.world.removeVehicleController(this.vehicle);
     if (this.body) this.world.removeRigidBody(this.body);
     Object.assign(this.state, createCar(), spawn);
+    if (this.options.explicitControls) selectGear(this.state, 'P');
     const hit = this.world.castRay(new RAPIER.Ray({ x: spawn.x, y: 100, z: spawn.z }, { x: 0, y: -1, z: 0 }), 200, true);
     const ground = hit ? 100 - hit.timeOfImpact : ROAD_HEIGHT;
     this.body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
@@ -122,7 +123,7 @@ export class VehiclePhysics {
     this.sync();
     const previousSpeed = this.state.speed;
     const onRoad = this.options.environment === 'flat' || isOnRoad(this.state.x, this.state.z);
-    const { driveAcceleration, resistance } = updateDriveForces(this.state, input, dt, onRoad);
+    const { driveAcceleration, resistance, parkingResistance } = updateDriveForces(this.state, input, dt, onRoad);
     const effects = this.damage.effects;
     const engineForce = Math.sign(this.state.gear) * Math.max(0, driveAcceleration - resistance) * CAR.mass / 4 * effects.power;
     const brakingImpulse = Math.max(0, resistance - driveAcceleration) * CAR.mass * dt / 4;
@@ -136,7 +137,9 @@ export class VehiclePhysics {
       this.vehicle.setWheelSuspensionRelaxation(i, SUSPENSION.relaxation * effects.suspension[i]!);
       // Rapier's wheel forward axis is +Z; the sedan faces local -Z.
       this.vehicle.setWheelEngineForce(i, -engineForce);
-      this.vehicle.setWheelBrake(i, brakingImpulse);
+      // Simplified wheel brakes hold Park and the separate parking brake.
+      const parkingImpulse = parkingResistance * CAR.mass * dt / 4;
+      this.vehicle.setWheelBrake(i, brakingImpulse + parkingImpulse);
     }
     this.body.wakeUp();
     this.vehicle.updateVehicle(dt, undefined, undefined, collider => collider.parent()?.handle !== this.body.handle);
@@ -184,6 +187,16 @@ export class VehiclePhysics {
       });
     });
     this.damage.update([...samples.values()], dt);
+  }
+
+  /** Include lateral and vertical movement in the complete-stop selector interlock. */
+  selectGear(selection: GearSelection): boolean {
+    this.sync();
+    const velocity = this.body.linvel();
+    // Settled raycast suspension retains a small vertical solver velocity.
+    // Ignore that jitter, but reject lateral movement and airborne falling.
+    const motionSpeed = Math.hypot(velocity.x, velocity.z, Math.abs(velocity.y) > TRANSMISSION.suspensionJitterSpeed ? velocity.y : 0);
+    return selectGear(this.state, selection, motionSpeed);
   }
 
   /** Restore the sedan in place, preserving its pose, velocity and selected gear. */

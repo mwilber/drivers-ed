@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createDamageVisuals } from './damage-visuals.ts';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import type { CarState } from './simulation.ts';
+import { indicatorLit, type CarState } from './simulation.ts';
 import type { VehiclePhysics } from './vehicle-physics.ts';
 import { CAR, SUSPENSION } from './vehicle-config.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
@@ -125,6 +125,26 @@ export function createScene(canvas: HTMLCanvasElement) {
   const paint = 0xc8cec8;
   const damageVisuals = createDamageVisuals();
   car.add(damageVisuals.group);
+  const headlightMaterials: THREE.MeshStandardMaterial[] = [];
+  const headlightBeams: THREE.SpotLight[] = [];
+  const signalMaterials: { side: 'left' | 'right'; paint: THREE.MeshStandardMaterial }[] = [];
+  for (const x of [-0.68, 0.68]) {
+    const lens = box(car, 0.32, 0.14, 0.05, x, 0.6, -CAR.length / 2 - 0.01, 0xd8dfd2);
+    const lensPaint = new THREE.MeshStandardMaterial({ color: 0xd8dfd2, emissive: 0xfff4ce, emissiveIntensity: 0 });
+    lens.material = lensPaint;
+    headlightMaterials.push(lensPaint);
+    const beam = new THREE.SpotLight(0xfff4ce, 0, 60, 0.35, 0.45, 2);
+    beam.position.set(x, 0.63, -2.2);
+    beam.target.position.set(x, 0, -35);
+    car.add(beam, beam.target);
+    headlightBeams.push(beam);
+    for (const z of [-CAR.length / 2 - 0.02, CAR.length / 2 + 0.02]) {
+      const signal = box(car, 0.14, 0.12, 0.05, Math.sign(x) * 0.84, 0.6, z, 0x8c6b32);
+      const signalPaint = new THREE.MeshStandardMaterial({ color: 0x8c6b32, emissive: 0xffa51f, emissiveIntensity: 0 });
+      signal.material = signalPaint;
+      signalMaterials.push({ side: x < 0 ? 'left' : 'right', paint: signalPaint });
+    }
+  }
   const headliner = box(car, 1.7, 0.01, 1.92, 0, 1.565, 0.35, paint);
   headliner.material = new THREE.MeshBasicMaterial({ color: 0xc7cec0 });
   box(car, 0.09, 0.32, 1.7, -0.86, 0.89, 0.28, 0x313b3c);
@@ -173,6 +193,9 @@ export function createScene(canvas: HTMLCanvasElement) {
   return {
     render(state: CarState, physics: VehiclePhysics) {
       damageVisuals.update(physics.damage);
+      for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
+      for (const beam of headlightBeams) beam.intensity = state.headlights ? 900 : 0;
+      for (const signal of signalMaterials) signal.paint.emissiveIntensity = indicatorLit(state) && (state.indicator === signal.side || state.indicator === 'hazards') ? 3 : 0;
       chassis.position.copy(physics.position);
       chassis.quaternion.copy(physics.rotation);
       for (let i = 0; i < wheelMeshes.length; i++) {
