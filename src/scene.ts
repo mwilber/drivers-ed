@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import type { CarState } from './simulation.ts';
-import { CAR } from './vehicle-config.ts';
-import { BOUNDARY_OBSTACLES, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, TREES } from './world-layout.ts';
+import type { VehiclePhysics } from './vehicle-physics.ts';
+import { CAR, SUSPENSION } from './vehicle-config.ts';
+import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
 
 const materials = new Map<number, THREE.MeshStandardMaterial>();
 function material(color: number): THREE.MeshStandardMaterial {
@@ -44,11 +46,33 @@ export function createScene(canvas: HTMLCanvasElement) {
   sun.shadow.normalBias = 0.04;
   scene.add(sun);
 
-  box(scene, 1800, 0.15, 1800, 0, -0.15, 0, 0x879e6b);
-  // Sidewalk strips merge at junctions. The raised edge remains low and drivable.
-  for (const road of PAVED_SURFACES) box(scene, road.width + 4, 0.13, road.depth + 4, road.x, -0.02, road.z, 0xc9c8b9);
-  for (const road of PAVED_SURFACES) box(scene, road.width, 0.04, road.depth, road.x, 0.06, road.z, 0x596168);
+  box(scene, 1800, 0.15, 1800, 0, -0.075, 0, 0x879e6b);
+  for (const sidewalk of SIDEWALKS) box(scene, sidewalk.width, SIDEWALK_HEIGHT, sidewalk.depth, sidewalk.x, SIDEWALK_HEIGHT / 2, sidewalk.z, 0xc9c8b9);
+  for (const road of PAVED_SURFACES) box(scene, road.width, ROAD_HEIGHT, road.depth, road.x, ROAD_HEIGHT / 2, road.z, 0x596168);
+  for (const driveway of DRIVEWAYS) box(scene, driveway.width, ROAD_HEIGHT, driveway.depth, driveway.x, ROAD_HEIGHT / 2, driveway.z, 0xb8b9aa);
   for (const line of PARKING_MARKINGS) box(scene, line.width, 0.006, line.depth, line.x, 0.084, line.z, 0xe9e7da).castShadow = false;
+  const vertices = rampVertices();
+  const points = [];
+  for (let i = 0; i < vertices.length; i += 3) points.push(new THREE.Vector3(vertices[i], vertices[i + 1], vertices[i + 2]));
+  const ramp = new THREE.Mesh(new ConvexGeometry(points), material(0xb2aa8b));
+  ramp.castShadow = true;
+  ramp.receiveShadow = true;
+  scene.add(ramp);
+  box(scene, TEST_CURB.width, TEST_CURB.height, TEST_CURB.depth, TEST_CURB.x, ROAD_HEIGHT + TEST_CURB.height / 2, TEST_CURB.z, 0xc9c8b9);
+  for (const [text, x, z] of [['RAMP', TEST_RAMP.x, -124], ['CURB', TEST_CURB.x, -132]] as const) {
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 512;
+    labelCanvas.height = 128;
+    const context = labelCanvas.getContext('2d')!;
+    context.fillStyle = '#ede5bd';
+    context.textAlign = 'center';
+    context.font = 'bold 80px sans-serif';
+    context.fillText(text, 256, 95);
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(labelCanvas), transparent: true, depthWrite: false }));
+    label.rotation.x = -Math.PI / 2;
+    label.position.set(x, ROAD_HEIGHT + 0.01, z);
+    scene.add(label);
+  }
   // Break center lines at all three intersections along each long street.
   for (const z of [-60, 60]) {
     for (let x = -90; x <= 90; x += 7) {
@@ -71,13 +95,6 @@ export function createScene(canvas: HTMLCanvasElement) {
     roof.position.set(house.x, house.height + 1.75, house.z);
     roof.castShadow = true;
     scene.add(roof);
-    if (Math.abs(house.x) < 100) {
-      const roadZ = house.z < 0 ? -60 : 60;
-      const towardRoad = Math.sign(roadZ - house.z);
-      const edge = house.z + towardRoad * house.depth / 2;
-      const end = roadZ - towardRoad * 5;
-      box(scene, 3.8, 0.035, Math.abs(end - edge), house.x + 3, 0.02, (edge + end) / 2, 0xb8b9aa);
-    }
   }
 
   const crownGeometry = new THREE.IcosahedronGeometry(1, 1);
@@ -98,8 +115,11 @@ export function createScene(canvas: HTMLCanvasElement) {
   // Low hedges make the sandbox's collision boundary visible.
   for (const boundary of BOUNDARY_OBSTACLES) box(scene, boundary.halfWidth * 2, 1.6, boundary.halfDepth * 2, boundary.x, 0.8, boundary.z, 0x617a50);
 
+  const chassis = new THREE.Group();
+  scene.add(chassis);
   const car = new THREE.Group();
-  scene.add(car);
+  car.position.y = -SUSPENSION.centerOfMassHeight;
+  chassis.add(car);
   // A blank sedan with a hood, cabin frame, dashboard, and simple steering wheel.
   const paint = 0xc8cec8;
   box(car, CAR.width, 0.42, CAR.length, 0, 0.51, 0, paint);
@@ -115,13 +135,16 @@ export function createScene(canvas: HTMLCanvasElement) {
   }
   box(car, 1.7, 0.2, 0.55, 0, 0.81, -0.65, 0x273332);
   box(car, 1.65, 0.07, 0.58, 0, 0.94, -0.68, 0x36423f);
-  // Wheels establish the sedan's proportions without adding body styling.
-  for (const x of [-0.87, 0.87]) {
-    for (const z of [-1.35, 1.35]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.18, 16), material(0x242b2b));
-      wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(x, 0.32, z);
-      car.add(wheel);
+  const wheelMeshes: THREE.Group[] = [];
+  const tireGeometry = new THREE.CylinderGeometry(CAR.tireRadius, CAR.tireRadius, 0.18, 16);
+  tireGeometry.rotateZ(Math.PI / 2);
+  for (const z of [-CAR.wheelbase / 2, CAR.wheelbase / 2]) {
+    for (const x of [-SUSPENSION.trackWidth / 2, SUSPENSION.trackWidth / 2]) {
+      const wheel = new THREE.Group();
+      wheel.add(new THREE.Mesh(tireGeometry, material(0x242b2b)));
+      wheel.position.set(x, -SUSPENSION.restLength, z);
+      chassis.add(wheel);
+      wheelMeshes.push(wheel);
     }
   }
   const steeringPivot = new THREE.Group();
@@ -148,9 +171,16 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState) {
-      car.position.set(state.x, 0, state.z);
-      car.rotation.y = state.heading;
+    render(state: CarState, physics: VehiclePhysics) {
+      chassis.position.copy(physics.position);
+      chassis.quaternion.copy(physics.rotation);
+      for (let i = 0; i < wheelMeshes.length; i++) {
+        const pose = physics.wheels[i]!;
+        const wheel = wheelMeshes[i]!;
+        wheel.position.set(pose.x, pose.y, pose.z);
+        wheel.rotation.y = pose.steering;
+        wheel.children[0]!.rotation.x = pose.rotation;
+      }
       steeringWheel.rotation.z = state.steering * 2.8;
       renderer.render(scene, camera);
     },

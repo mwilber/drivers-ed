@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 2 adds tuned flat-road handling and an automatic drivetrain to the original placeholder neighborhood and sedan.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 3 adds Rapier rigid-body physics, suspension, slopes, curbs, and collision response to the placeholder neighborhood and sedan.
 
 ## Run locally
 
@@ -20,7 +20,7 @@ npm test        # Driving and world-layout tests using Node's built-in runner
 npm run handling:check # Repeatable flat-road handling measurements
 ```
 
-Use a browser with WebGL 2 and hardware acceleration enabled. All scenery is generated locally; the game loads no external models, textures, or fonts.
+Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All scenery is generated locally; the game loads no external models, textures, or fonts. Rapier's WebAssembly is bundled with the application. Its compatibility package increases the production download size; Vite currently reports a large-bundle advisory.
 
 ## Controls
 
@@ -30,6 +30,7 @@ Use a browser with WebGL 2 and hardware acceleration enabled. All scenery is gen
 | S / Down | Brake, then reverse while held |
 | A / Left, D / Right | Steer |
 | R / Reset button | Return to the starting position |
+| Test area button | Reset upright on the approach to the suspension test ramp |
 
 Releasing steering centers the wheel. Releasing the accelerator lets the car coast down with engine braking. Holding both direction keys brakes and holds the car at a stop. Holding the opposite direction first brakes to a complete stop, then engages that direction after a short stationary delay; releasing it cancels the pending change. Direction selection and forward shifts are automatic, with D1/D2/D3…/R/N shown on the speed display; there are no manual gears. The display retains the selected gear when stopped. Touch devices get steering and direction buttons. Switching away from the page clears input and pauses motion.
 
@@ -51,30 +52,44 @@ The reference vehicle is a fictional 1,500 kg sedan, 4.5 m long and 1.8 m wide, 
 - Progressive throttle and brake response, engine torque, rolling resistance, aerodynamic drag, and engine braking.
 - Six available automatic forward ratios and a reverse ratio, with shift hysteresis, brief power interruptions during shifts, and first-gear selection for launch. Sustained high-speed driving uses all six forward ratios.
 - A complete-stop interlock and 0.35-second selection delay when changing direction, followed by brake release and throttle buildup. There is no automatic creep with this simplified control scheme.
-- Rate-limited steering with a short yaw response time. Full steering lock stays available at every speed and remains held while a direction key is down. Speed reduces how quickly steering builds, rather than unwinding the held wheel; releasing the key centers it.
-- An aggregate tire-grip budget shared between longitudinal and lateral acceleration: hard braking reduces available cornering force, and excessive steering demand widens the turn.
+- Rate-limited steering. Full steering lock stays available at every speed and remains held while a direction key is down. Speed reduces how quickly steering builds, rather than unwinding the held wheel; releasing the key centers it.
+- Grip-limited handling. Phase 3 now applies tire forces at each suspension contact, replacing the original planar turn limiter.
 - A 115 mph forward governor, with a measured sustained speed around 112.5 mph after drag and rolling resistance. Reverse remains limited to about 11 mph, with slower driving and greater resistance on grass.
 
-Repeatable checks run on an obstacle-free flat test pad in code, without adding a new area to the playable world. The current neighborhood's short streets do not provide room for a full top-speed run. The stopping test starts applying the brakes at 30 mph and excludes human reaction time. The turning measurement follows the car's center path at approximately 1 m/s, rather than measuring an outer-wheel or body turning circle. Full steering lock does not guarantee a tight turn at speed: the tire-grip limit still widens the trajectory.
+The current measurements below use the same Rapier vehicle as the browser, on an obstacle-free flat test pad in code. The neighborhood's short streets do not provide room for a full top-speed run. The stopping test starts applying the brakes at 30 mph and excludes human reaction time. The turning measurement follows the car's center path at approximately 1 m/s, rather than measuring an outer-wheel or body turning circle. Full steering lock does not guarantee a tight turn at speed: tire grip limits the trajectory.
 
 | Check | Acceptance target | Current measurement |
 | --- | --- | --- |
 | 0–30 mph acceleration | 5–7 s | 5.32 s |
-| 30–0 mph stopping distance | 12–17 m | 12.37 m |
+| 30–0 mph stopping distance | 12–17 m | 12.32 m |
 | 30–0 mph stopping time | 1.5–2.2 s | 1.77 s |
 | Speed after 5 s coasting from 30 mph | 22–26 mph | 23.52 mph |
-| Low-speed full-lock center-path radius | 4.7–5.3 m | 4.94 m |
-| Sustained speed after 180 s at full throttle | 110–115 mph | 112.46 mph |
-| Same timed maneuver at 30/60/144 Hz and uneven frame times | Identical simulation steps and resulting state | Pass |
+| Low-speed full-lock center-path radius | 4.8–5.7 m | 5.34 m |
+| Sustained speed after 180 s at full throttle | 110–115 mph | 112.45 mph |
+| Same timed rigid-body maneuver at 30/60/144 Hz | Identical resulting position, orientation, and speed | Pass |
 
 Run `npm run handling:check` to reproduce the measurements and `npm test` to check their acceptance bounds, held-steering behavior, direction transitions, transmission behavior, grip limits, braking and obstacle collisions from 115 mph, collision recovery, and frame-rate consistency.
 
-The simulation remains a fixed 120 Hz planar bicycle model. Grip saturation limits turning authority; it does not model individual tire slip, sideways skids, or spinouts. Collision handling still stops the car at obstacles. Suspension, weight transfer, richer collision response, damage, traffic, pedestrians, objectives, audio, and detailed vehicle art remain future work.
+## Phase 3 — Suspension, ground contact, and collisions
+
+- A dynamic 1,500 kg chassis runs at 120 Hz with four raycast suspension contacts. Each wheel has spring travel, compression/rebound damping, contact-dependent drive/brake forces, and lateral friction.
+- The cockpit follows the physical body, so slopes, bumps, acceleration, and braking can produce pitch and roll. Wheel positions follow suspension travel; front wheels steer visually and physically.
+- Gravity acts on slopes and while airborne. Airborne wheels cannot propel the vehicle. Holding both direction keys applies the brakes to hold a shallow slope; releasing them permits gravity-driven rollback.
+- Houses, tree trunks, hedges, pavement, and sidewalks have 3D colliders. Glancing impacts retain tangential movement instead of forcing a complete stop. Continuous collision detection is enabled on the chassis and is tested against a thin wall at 115 mph.
+- Sidewalks now have actual 15 cm raised edges. Their geometry is cut around intersections, lot entrances, and driveways so those routes remain flush. Rendering and collision construction share the same layout dimensions.
+- Reset clears the chassis, wheel controller, motion, and pending controls, then settles a fresh suspension at a known safe spawn. An overturned car displays a recovery hint. **R** returns to the neighborhood start; **Test area** places the car before the ramp.
+
+The **T** area is east of the parking lot, connected through its southeast side. It contains a 10 m-wide ramp with a 1.2 m rise, shallow 12 m approaches and an 8 m plateau, plus a separate 15 cm raised curb pad. Approach slowly to observe pitching over the ramp or drive one side of the car over the curb pad to observe roll. The original parking lot stays open for turning practice.
+
+Rapier was selected for its [raycast vehicle controller](https://rapier.rs/javascript3d/classes/DynamicRayCastVehicleController.html) and [continuous collision detection](https://rapier.rs/docs/user_guides/javascript/rigid_body_ccd/), avoiding a custom 3D contact solver. The current implementation is still a simplified sedan: wheel contacts are rays rather than deformable tire shapes; all four contacts share drive force; there is no detailed tire model, suspension linkage geometry, crash deformation, or validated real-car calibration. Very sharp edges and extreme maneuvers may produce simplified responses. Use Reset if the car becomes stuck or overturned.
+
+The test suite checks flat-ground settling, performance targets, held steering and reverse transitions, the drive-in route, ramp ascent/descent, braking on a slope, asymmetric curb traversal, airborne contact loss and landing, glancing impacts, high-speed wall collision, repeated recovery, and deterministic frame-rate behavior. Phase 2's planar model remains only as an isolated controls/drivetrain reference; the browser uses the Rapier model. Traffic, pedestrians, objectives, audio, and detailed vehicle art remain future phases.
 
 ## Structure
 
-- `src/simulation.ts`: Renderer-independent vehicle state, input, movement, and collision detection, in metres/seconds/radians.
-- `src/vehicle-config.ts`: Sedan dimensions, mass, engine torque curve, transmission ratios, and handling targets.
+- `src/simulation.ts`: Shared input and drivetrain forces plus the Phase 2 planar reference model, in metres/seconds/radians.
+- `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
+- `src/vehicle-config.ts`: Sedan dimensions, mass, engine torque curve, transmission ratios, and suspension/handling tuning.
 - `src/simulation-clock.ts`: Fixed-step accumulator shared by the browser and frame-rate regression checks.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
@@ -83,9 +98,11 @@ The simulation remains a fixed 120 Hz planar bicycle model. Grip saturation limi
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
 - `tests/parking-lot.test.mjs`: Paved access, obstacle clearance, and complete practice circles in the parking lot.
-- `scripts/handling-scenarios.mjs`: Repeatable flat-road maneuvers used by tests and `npm run handling:check`.
+- `tests/vehicle-physics.test.mjs`: Current rigid-body vehicle behavior, terrain, collisions, and recovery regressions.
+- `scripts/handling-scenarios.mjs`: Phase 2 reference maneuvers used by isolated drivetrain tests.
+- `scripts/physics-scenarios.mjs`: Current rigid-body measurements used by tests and `npm run handling:check`.
 
-Three.js, TypeScript, and Vite were approved for this phase; `@types/three` supplies Three.js's TypeScript definitions. Ask the project owner before adding any other third-party libraries. Keep subsequent work within the phase explicitly requested.
+Three.js, TypeScript, and Vite were approved for Phase 1; `@types/three` supplies Three.js's TypeScript definitions. `@dimforge/rapier3d-compat` was approved for Phase 3. Ask the project owner before adding any other third-party libraries. Keep subsequent work within the phase explicitly requested.
 
 ## Development roadmap
 
@@ -103,7 +120,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** The sedan behaves predictably at parking and neighborhood speeds, and the same maneuver produces comparable results across different rendering frame rates.
 
-### Phase 3 — Suspension, road contact, and collisions
+### Phase 3 — Suspension, road contact, and collisions (completed)
 
 **Focus:** Make the vehicle respond to the ground and physical obstacles.
 

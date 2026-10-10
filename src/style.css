@@ -32,9 +32,9 @@ h2 { margin: 10px 0 7px; font-size: clamp(25px, 2.6vw, 38px); letter-spacing: -1
 kbd { min-width: 21px; height: 21px; padding: 3px; display: inline-grid; place-items: center; border: 1px solid #b8c1b3; border-bottom-width: 2px; border-radius: 4px; font: 10px "Avenir Next", sans-serif; color: #384f3d; background: #f9faf5; }
 .controls > span > kbd:last-of-type { margin-right: 4px; }
 .arrow-keys { display: flex; gap: 4px; margin-left: 3px; }
-#reset { display: flex; align-items: center; gap: 7px; padding: 0; background: transparent; border: 0; cursor: pointer; color: #415a47; font-size: 10px; }
+#reset, #test-area { display: flex; align-items: center; gap: 7px; padding: 0; background: transparent; border: 0; cursor: pointer; color: #415a47; font-size: 10px; white-space: nowrap; }
 #reset > span { font-size: 18px; }
-#reset:hover { color: #14291b; }
+#reset:hover, #test-area:hover { color: #14291b; }
 button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
 .build-label { grid-row: 2; font-size: 7px; letter-spacing: 1.6px; color: #7e897a; text-align: right; }
 .instrument { position: absolute; left: 50%; bottom: 131px; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; color: #e9edde; text-shadow: 0 1px 10px #101b13; padding: 11px 21px; background: #1d2d29d9; border: 1px solid #83958a45; border-radius: 10px; pointer-events: none; }
@@ -76,7 +76,7 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
   kbd { min-width: 17px; height: 18px; font-size: 8px; }
   .controls > span > kbd:nth-child(2) { display: none; }
   .controls > span:nth-child(3) > kbd:nth-child(2) { display: inline-grid; }
-  #reset { font-size: 8px; }
+  #reset, #test-area { font-size: 8px; }
   .instrument { bottom: 119px; padding: 9px 14px; gap: 12px; }
   #speed { font-size: 29px; }
   #notice { top: 72px; font-size: 10px; white-space: nowrap; }

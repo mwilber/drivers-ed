@@ -8,6 +8,19 @@ export const CAR = {
   tireRadius: 0.31,
 } as const;
 
+export const SUSPENSION = {
+  centerOfMassHeight: 0.61,
+  trackWidth: 1.56,
+  restLength: 0.38,
+  travel: 0.2,
+  stiffness: 30,
+  compression: 4.4,
+  relaxation: 5.2,
+  maxForce: 18000,
+  tireFriction: 1.2,
+  sideStiffness: 1,
+} as const;
+
 export const HANDLING = {
   gravity: 9.81,
   forwardSpeedLimit: 51.4096, // 115 mph governor; drag puts sustained speed slightly below it.

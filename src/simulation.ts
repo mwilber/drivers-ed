@@ -131,12 +131,11 @@ function updateTransmission(car: CarState, dt: number): void {
   car.engineRpm += (targetRpm - car.engineRpm) * (1 - Math.exp(-dt / 0.12));
 }
 
-/** Fixed-step planar model with a drivetrain and a shared longitudinal/lateral grip budget. */
-export function stepCar(car: CarState, input: DrivingInput, dt: number, obstacles: readonly Obstacle[], onRoad: boolean): void {
+/** Shared input/drivetrain tuning for the rigid-body vehicle and planar reference checks. */
+export function updateDriveForces(car: CarState, input: DrivingInput, dt: number, onRoad: boolean) {
   updatePedals(car, input, dt);
   updateTransmission(car, dt);
-  const speedBefore = car.speed;
-  const speedMagnitude = Math.abs(speedBefore);
+  const speedMagnitude = Math.abs(car.speed);
   const steeringInput = Number(input.left) - Number(input.right);
   // Speed changes how quickly keyboard steering builds, never the held angle.
   // A shrinking angle limit would unwind the wheel while the driver still holds it.
@@ -153,6 +152,13 @@ export function stepCar(car: CarState, input: DrivingInput, dt: number, obstacle
   const drag = HANDLING.aerodynamicDrag * speedMagnitude ** 2 / CAR.mass;
   const engineDrag = car.gear === 0 ? 0 : (HANDLING.engineBraking + HANDLING.engineBrakingPerSpeed * speedMagnitude) * (1 - car.throttle);
   const resistance = rolling + drag + engineDrag + car.brake * HANDLING.brakeDeceleration;
+  return { driveAcceleration, resistance, grip };
+}
+
+/** Phase 2 planar reference model retained for isolated drivetrain regression checks. */
+export function stepCar(car: CarState, input: DrivingInput, dt: number, obstacles: readonly Obstacle[], onRoad: boolean): void {
+  const { driveAcceleration, resistance, grip } = updateDriveForces(car, input, dt, onRoad);
+  const speedBefore = car.speed;
   // Resistance cannot push a stopped car backwards; only an engaged gear can launch it.
   const motionDirection = Math.sign(speedBefore) || Math.sign(car.gear);
   const signedDrive = Math.sign(car.gear) * driveAcceleration;

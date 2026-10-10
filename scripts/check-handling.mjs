@@ -1,7 +1,7 @@
-import { measureHandling } from './handling-scenarios.mjs';
+import { measurePhysics } from './physics-scenarios.mjs';
 
-console.log('Generic sedan — flat, dry road; no obstacles; 120 Hz simulation');
-const result = measureHandling();
+console.log('Generic sedan — Rapier rigid body; flat, dry road; no obstacles; 120 Hz');
+const result = await measurePhysics();
 console.table({
   '0–30 mph (seconds)': result.zeroTo30Seconds.toFixed(2),
   '30–0 mph distance (metres)': result.stoppingDistanceMetres.toFixed(2),

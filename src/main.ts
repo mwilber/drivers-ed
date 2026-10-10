@@ -1,8 +1,9 @@
 import './style.css';
 import { createScene } from './scene.ts';
-import { createCar, stepCar, stopCar, type DrivingInput } from './simulation.ts';
+import { createCar, type DrivingInput } from './simulation.ts';
+import { createVehiclePhysics, type Spawn, type VehiclePhysics } from './vehicle-physics.ts';
 import { SimulationClock } from './simulation-clock.ts';
-import { HOUSES, isOnRoad, OBSTACLES, PARKING_LOT, PARKING_MARKINGS, PAVED_SURFACES, TREES, WORLD_BOUNDS } from './world-layout.ts';
+import { HOUSES, isOnRoad, PARKING_LOT, PARKING_MARKINGS, PAVED_SURFACES, TEST_AREA, TEST_CURB, TEST_RAMP, TREES, WORLD_BOUNDS } from './world-layout.ts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
 const speed = document.querySelector<HTMLElement>('#speed')!;
@@ -11,7 +12,8 @@ const status = document.querySelector<HTMLElement>('#drive-status')!;
 const notice = document.querySelector<HTMLElement>('#notice')!;
 const map = document.querySelector<HTMLCanvasElement>('#map')!;
 const context = map.getContext('2d')!;
-const car = createCar();
+let car = createCar();
+let physics: VehiclePhysics | undefined;
 const clock = new SimulationClock();
 const keys = new Set<string>();
 const touches = new Map<number, keyof DrivingInput>();
@@ -31,13 +33,15 @@ function clearInput() {
   touches.clear();
   document.querySelectorAll('[data-drive]').forEach(button => button.classList.remove('pressed'));
 }
-function reset() {
-  Object.assign(car, createCar());
+function reset(spawn?: Spawn) {
+  if (!physics) return;
+  physics.reset(spawn);
   clock.reset();
   clearInput();
-  showNotice('Back at the start. Take your time.');
+  showNotice(spawn ? 'Test area. Approach the ramp slowly.' : 'Back at the start. Take your time.');
 }
-document.querySelector('#reset')!.addEventListener('click', reset);
+document.querySelector('#reset')!.addEventListener('click', () => reset());
+document.querySelector('#test-area')!.addEventListener('click', () => reset({ x: TEST_RAMP.x, z: -118, heading: 0 }));
 window.addEventListener('keydown', event => {
   if (event.ctrlKey || event.metaKey || event.altKey || event.target instanceof HTMLInputElement) return;
   if (bindings[event.code]) {
@@ -51,7 +55,7 @@ window.addEventListener('blur', clearInput);
 document.addEventListener('visibilitychange', () => {
   clearInput();
   // Freeze the car when the page is hidden; returning never causes a jump.
-  if (document.hidden) { stopCar(car); clock.reset(); }
+  if (document.hidden) { physics?.pause(); clock.reset(); }
 });
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-drive]')) {
   button.addEventListener('pointerdown', event => {
@@ -88,6 +92,9 @@ function drawMap() {
   c.font = 'bold 14px sans-serif';
   c.textAlign = 'center';
   c.fillText('P', PARKING_LOT.x, PARKING_LOT.z + 5);
+  c.fillText('T', TEST_AREA.x, TEST_AREA.z + 31);
+  c.fillStyle = '#b2aa8b';
+  for (const feature of [TEST_RAMP, TEST_CURB]) c.fillRect(feature.x - feature.width / 2, feature.z - feature.depth / 2, feature.width, feature.depth);
   c.fillStyle = '#b2bca6';
   for (const house of HOUSES) c.fillRect(house.x - house.width / 2, house.z - house.depth / 2, house.width, house.depth);
   c.fillStyle = '#99ac85';
@@ -110,8 +117,13 @@ function showError(message: string) {
   document.querySelector<HTMLElement>('#error-message')!.textContent = message;
 }
 
-try {
+async function start() {
   const scene = createScene(canvas);
+  showNotice('Preparing the vehicle…');
+  physics = await createVehiclePhysics();
+  car = physics.state;
+  clearInput();
+  showNotice('Ready. Suspension test area: T on the map.');
   let lastTime = performance.now();
   let lostContext = false;
   canvas.addEventListener('webglcontextlost', event => {
@@ -128,15 +140,16 @@ try {
     const input: DrivingInput = { forward: false, reverse: false, left: false, right: false };
     for (const key of keys) if (bindings[key]) input[bindings[key]] = true;
     for (const control of touches.values()) input[control] = true;
-    clock.advance(dt, step => stepCar(car, input, step, OBSTACLES, isOnRoad(car.x, car.z)));
+    clock.advance(dt, step => physics!.step(input, step));
     speed.textContent = String(Math.round(Math.abs(car.speed) * 2.236936));
     gear.textContent = car.gear < 0 ? 'R' : car.gear > 0 ? `D${car.gear}` : 'N';
-    status.textContent = Math.abs(car.speed) < 0.05 ? 'READY WHEN YOU ARE' : !isOnRoad(car.x, car.z) ? 'OFF THE BEATEN PATH' : car.speed < 0 ? 'TAKING A STEP BACK' : 'A LITTLE FURTHER FROM HURRY';
-    scene.render(car);
+    status.textContent = physics!.needsRecovery ? 'PRESS R TO RECOVER' : Math.abs(car.speed) < 0.05 ? 'READY WHEN YOU ARE' : !isOnRoad(car.x, car.z) ? 'OFF THE BEATEN PATH' : car.speed < 0 ? 'TAKING A STEP BACK' : 'A LITTLE FURTHER FROM HURRY';
+    scene.render(car, physics!);
     drawMap();
   }
   requestAnimationFrame(frame);
-} catch (error) {
-  console.error(error);
-  showError('WebGL could not start. Use a browser with WebGL 2 and hardware acceleration enabled, then reload.');
 }
+void start().catch(error => {
+  console.error(error);
+  showError('The graphics or physics engine could not start. Use a browser with WebGL 2 and WebAssembly enabled, then reload.');
+});
