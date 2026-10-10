@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CarState } from './simulation.ts';
 import { CAR } from './vehicle-config.ts';
-import { HOUSES, ROADS, TREES } from './world-layout.ts';
+import { BOUNDARY_OBSTACLES, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, TREES } from './world-layout.ts';
 
 const materials = new Map<number, THREE.MeshStandardMaterial>();
 function material(color: number): THREE.MeshStandardMaterial {
@@ -46,8 +46,9 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   box(scene, 1800, 0.15, 1800, 0, -0.15, 0, 0x879e6b);
   // Sidewalk strips merge at junctions. The raised edge remains low and drivable.
-  for (const road of ROADS) box(scene, road.width + 4, 0.13, road.depth + 4, road.x, -0.02, road.z, 0xc9c8b9);
-  for (const road of ROADS) box(scene, road.width, 0.04, road.depth, road.x, 0.06, road.z, 0x596168);
+  for (const road of PAVED_SURFACES) box(scene, road.width + 4, 0.13, road.depth + 4, road.x, -0.02, road.z, 0xc9c8b9);
+  for (const road of PAVED_SURFACES) box(scene, road.width, 0.04, road.depth, road.x, 0.06, road.z, 0x596168);
+  for (const line of PARKING_MARKINGS) box(scene, line.width, 0.006, line.depth, line.x, 0.084, line.z, 0xe9e7da).castShadow = false;
   // Break center lines at all three intersections along each long street.
   for (const z of [-60, 60]) {
     for (let x = -90; x <= 90; x += 7) {
@@ -95,10 +96,7 @@ export function createScene(canvas: HTMLCanvasElement) {
     scene.add(crown);
   }
   // Low hedges make the sandbox's collision boundary visible.
-  box(scene, 2, 1.6, 274, -177, 0.8, 0, 0x617a50);
-  box(scene, 2, 1.6, 274, 177, 0.8, 0, 0x617a50);
-  box(scene, 356, 1.6, 2, 0, 0.8, -137, 0x617a50);
-  box(scene, 356, 1.6, 2, 0, 0.8, 137, 0x617a50);
+  for (const boundary of BOUNDARY_OBSTACLES) box(scene, boundary.halfWidth * 2, 1.6, boundary.halfDepth * 2, boundary.x, 0.8, boundary.z, 0x617a50);
 
   const car = new THREE.Group();
   scene.add(car);

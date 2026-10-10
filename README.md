@@ -42,6 +42,8 @@ Releasing steering centers the wheel. Releasing the accelerator lets the car coa
 - A sedan-sized collision footprint against houses, tree trunks, and the outer boundary.
 - A small live map, speed and direction display, and reset control.
 
+For turning practice, drive straight ahead from the starting position along the center street. Cross the north T-junction into the wide parking-lot entrance, marked **P** on the map. The lot is 120 × 90 metres, with a 16-metre entrance, perimeter parking spaces, and a large clear center for circles and figure eights. Both the entrance and lot have normal asphalt grip. The outer hedge boundary sits beyond the lot.
+
 ## Phase 2 — Implemented handling
 
 The reference vehicle is a fictional 1,500 kg sedan, 4.5 m long and 1.8 m wide, with a 2.7 m wheelbase and 0.31 m tire radius. These are authored tuning values, not specifications or measured validation for a real car. Vehicle configuration is independent of the renderer.
@@ -80,6 +82,7 @@ The simulation remains a fixed 120 Hz planar bicycle model. Grip saturation limi
 - `src/style.css`: Responsive interface and touch controls.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
+- `tests/parking-lot.test.mjs`: Paved access, obstacle clearance, and complete practice circles in the parking lot.
 - `scripts/handling-scenarios.mjs`: Repeatable flat-road maneuvers used by tests and `npm run handling:check`.
 
 Three.js, TypeScript, and Vite were approved for this phase; `@types/three` supplies Three.js's TypeScript definitions. Ask the project owner before adding any other third-party libraries. Keep subsequent work within the phase explicitly requested.
