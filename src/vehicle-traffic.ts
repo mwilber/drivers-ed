@@ -4,12 +4,14 @@ import { signalState } from './traffic-rules.ts';
 import { FIXED_STEP } from './simulation-clock.ts';
 import { CAR } from './vehicle-config.ts';
 import { VehicleDamage } from './vehicle-damage.ts';
+import type { CrossingHazard } from './pedestrians.ts';
 
 export const TRAFFIC_DENSITIES = { off: 0, single: 1, light: 6, busy: 16 } as const;
 export type TrafficDensity = keyof typeof TRAFFIC_DENSITIES;
 export const TRAFFIC_TUNING = { acceleration: 1.8, braking: 4.5, gap: 2.5, headway: 1.6, turnSpeed: 5, stopDwell: 0.7 } as const;
 export interface TrafficActor extends Point { heading: number; speed: number }
 export interface TrafficCar extends TrafficActor {
+  parked?: boolean;
   id: number; laneId: string; connectionId?: string; progress: number; route: string[];
   routeIndex: number; stoppedFor: number; arrivedAt?: number; braking: boolean;
   indicator: 'left' | 'right' | 'off'; reason: string; distanceTravelled: number;
@@ -183,11 +185,11 @@ export class VehicleTraffic {
     return true;
   }
   /** Distance to an actor's footprint along the upcoming path, including a turn and exit lane. */
-  private obstacleDistance(car: TrafficCar, actors: readonly TrafficActor[]): number {
+  private obstacleDistance(car: TrafficCar, actors: readonly TrafficActor[], crossings: readonly CrossingHazard[] = []): number {
     const lane = lanes.get(car.laneId)!, c = car.connectionId ? connections.get(car.connectionId)! : this.nextConnection(car);
     const horizon = Math.max(15, car.speed ** 2 / (2 * TRAFFIC_TUNING.braking) + car.speed * TRAFFIC_TUNING.headway + 10);
     const nearby = actors.filter(actor => distance(car, actor) <= horizon + CAR.length);
-    if (!nearby.length) return Infinity;
+    if (!nearby.length && !crossings.length) return Infinity;
     let nearest = Infinity;
     for (let d = 0; d <= horizon; d += 1) {
       const progress = car.progress + d;
@@ -200,6 +202,12 @@ export class VehicleTraffic {
         const p = onConnection && c ? cp - lengths.get(c.id)! : progress;
         pose = { x: target.start.x + target.direction.x * p, z: target.start.z + target.direction.z * p, heading: Math.atan2(-target.direction.x, -target.direction.z), speed: 0 };
       }
+      for (const { crossing } of crossings) {
+        // Scan the full upcoming path, including a turn and its outgoing crossing.
+        const halfX = Math.abs(Math.sin(pose.heading)) * CAR.length / 2 + Math.abs(Math.cos(pose.heading)) * CAR.width / 2;
+        const halfZ = Math.abs(Math.cos(pose.heading)) * CAR.length / 2 + Math.abs(Math.sin(pose.heading)) * CAR.width / 2;
+        if (Math.abs(pose.x - crossing.x) < crossing.width / 2 + halfX + 0.5 && Math.abs(pose.z - crossing.z) < crossing.depth / 2 + halfZ + 0.5) nearest = Math.min(nearest, d);
+      }
       for (const actor of nearby) {
         const dx = pose.x - actor.x, dz = pose.z - actor.z;
         // Actor-aligned rectangle expanded by the AI's half width, with a small margin.
@@ -211,7 +219,7 @@ export class VehicleTraffic {
     }
     return nearest;
   }
-  step(signalSeconds: number, player?: TrafficActor): void {
+  step(signalSeconds: number, player?: TrafficActor, crossings: readonly CrossingHazard[] = [], pedestrians: readonly TrafficActor[] = []): void {
     this.ticks++;
     // Following checks use pre-step poses; reservations admit cars in stable spawn order.
     const actors = this.cars.map(car => ({ ...car }));
@@ -222,6 +230,7 @@ export class VehicleTraffic {
     }
     const finished: TrafficCar[] = [];
     for (const car of this.cars) {
+      if (car.parked) { car.driveSpeed = 0; car.braking = true; car.reason = 'Parked'; continue; }
       if (car.stunnedFor > 0) { car.driveSpeed = 0; car.braking = true; car.reason = 'Collision recovery'; continue; }
       const lane = lanes.get(car.laneId)!, c = this.nextConnection(car);
       let target = Math.min(9, (speedZoneAt(car)?.mph ?? 25) * 0.44704);
@@ -238,8 +247,8 @@ export class VehicleTraffic {
         } else if (!c) available = Math.max(0, laneLength(lane) - car.progress);
         if (remaining < 25 && c?.turn !== 'straight') target = Math.min(target, TRAFFIC_TUNING.turnSpeed);
       } else target = Math.min(target, TRAFFIC_TUNING.turnSpeed);
-      const obstacle = this.obstacleDistance(car, [...actors.filter(a => a.id !== car.id), ...(player ? [player] : [])]);
-      if (obstacle < available) { available = Math.max(0, obstacle - TRAFFIC_TUNING.gap); car.reason = 'Following / obstruction'; }
+      const obstacle = this.obstacleDistance(car, [...actors.filter(a => a.id !== car.id), ...(player ? [player] : []), ...pedestrians], crossings);
+      if (obstacle < available) { available = Math.max(0, obstacle - TRAFFIC_TUNING.gap); car.reason = crossings.length ? 'Yielding / obstruction' : 'Following / obstruction'; }
       // Dynamic motors need stopping room for their response lag; never erase velocity to meet a stop target.
       const brakeMargin = car.physical ? 0.4 + Math.max(0, car.speed) * 0.35 : 0.04;
       target = Math.min(target, Math.sqrt(2 * TRAFFIC_TUNING.braking * Math.max(0, available - brakeMargin)));

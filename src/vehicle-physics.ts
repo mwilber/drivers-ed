@@ -34,6 +34,7 @@ export class VehiclePhysics {
   readonly damage = new VehicleDamage();
   private readonly eventQueue = new RAPIER.EventQueue(true);
   private readonly colliderMaterials = new Map<number, string>();
+  private readonly contactBodies = new Map<number, { body: RAPIER.RigidBody; receive: (contacts: readonly DamageContact[]) => void }>();
   private readonly damageBodies = new Map<number, { body: RAPIER.RigidBody; damage: VehicleDamage }>();
   body!: RAPIER.RigidBody;
   vehicle!: RAPIER.DynamicRayCastVehicleController;
@@ -83,6 +84,12 @@ export class VehiclePhysics {
     this.damageBodies.set(body.handle, { body, damage });
   }
   unregisterDamageBody(body: RAPIER.RigidBody): void { this.damageBodies.delete(body.handle); }
+
+  /** Additional finite-mass road users share pre-solver relative contact sampling. */
+  registerContactBody(body: RAPIER.RigidBody, receive: (contacts: readonly DamageContact[]) => void): void {
+    this.contactBodies.set(body.handle, { body, receive });
+  }
+  unregisterContactBody(body: RAPIER.RigidBody): void { this.contactBodies.delete(body.handle); }
 
   reset(spawn: Spawn = this.options.spawn ?? createCar()): void {
     this.damage.repair();
@@ -163,7 +170,7 @@ export class VehiclePhysics {
     this.body.wakeUp();
     this.vehicle.updateVehicle(dt, undefined, undefined, collider => collider.parent()?.handle !== this.body.handle);
     // Capture contact-point approach velocity before the collision solver changes it.
-    const velocities = new Map([...this.damageBodies].map(([handle, { body }]) => [handle, { linear: body.linvel(), angular: body.angvel() }]));
+    const velocities = new Map([...this.damageBodies, ...this.contactBodies].map(([handle, { body }]) => [handle, { linear: body.linvel(), angular: body.angvel() }]));
     this.world.step(this.eventQueue);
     this.recordDamage(velocities, dt);
     this.sync();
@@ -186,7 +193,7 @@ export class VehiclePhysics {
       const impulse = event.totalForceMagnitude() * dt;
       for (const car of [first, second]) {
         const body = car.parent(), other = car === first ? second : first;
-        if (!body || !this.damageBodies.has(body.handle) || other.parent()?.handle === body.handle) continue;
+        if (!body || (!this.damageBodies.has(body.handle) && !this.contactBodies.has(body.handle)) || other.parent()?.handle === body.handle) continue;
         const position = body.translation(), rotation = body.rotation();
         const inverse = { x: -rotation.x, y: -rotation.y, z: -rotation.z, w: rotation.w };
         const contacts = samples.get(body.handle) ?? new Map<number, DamageContact>();
@@ -215,6 +222,7 @@ export class VehiclePhysics {
         });
       }
     });
+    for (const [handle, { receive }] of this.contactBodies) receive([...(samples.get(handle)?.values() ?? [])]);
     for (const [handle, { damage }] of this.damageBodies) damage.update([...(samples.get(handle)?.values() ?? [])], dt);
   }
 

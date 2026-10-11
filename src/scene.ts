@@ -7,6 +7,8 @@ import type { VehiclePhysics } from './vehicle-physics.ts';
 import { CAR, SUSPENSION } from './vehicle-config.ts';
 import { createTrafficVisuals } from './traffic-visuals.ts';
 import type { TrafficCar } from './vehicle-traffic.ts';
+import { createPedestrianVisuals } from './pedestrian-visuals.ts';
+import type { Pedestrian } from './pedestrians.ts';
 import { MIRRORS, MIRROR_BUDGET, MirrorSchedule, mirrorGeometry, placeDriverCamera, placeMirrorCamera, type ViewSettings } from './cockpit.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
 
@@ -80,6 +82,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   }
   const roadVisuals = createRoadVisuals(scene);
   const trafficVisuals = createTrafficVisuals(scene);
+  const pedestrianVisuals = createPedestrianVisuals(scene);
 
   for (const house of HOUSES) {
     // Plain massing only: walls and a pitched roof, without doors or windows.
@@ -201,9 +204,10 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = []) {
+    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = []) {
       roadVisuals.update(trafficTime);
       trafficVisuals.update(traffic, trafficTime);
+      pedestrianVisuals.update(pedestrians, trafficTime);
       damageVisuals.update(physics.damage);
       for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
       for (const beam of headlightBeams) beam.intensity = state.headlights ? 900 : 0;

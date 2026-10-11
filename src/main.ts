@@ -5,6 +5,8 @@ import { ACTIONS, ACTION_LABELS, DriverInput, keyLabel, type Action } from './dr
 import { createVehiclePhysics, type Spawn, type VehiclePhysics } from './vehicle-physics.ts';
 import { TrafficSignals, upcomingControl, controlGuidance } from './traffic-rules.ts';
 import { VehicleTraffic, type TrafficDensity } from './vehicle-traffic.ts';
+import { Pedestrians } from './pedestrians.ts';
+import { PEDESTRIAN_SCENARIOS, loadPedestrianScenario, type PedestrianScenario } from './pedestrian-scenarios.ts';
 import { TrafficPhysics } from './traffic-physics.ts';
 import { TRAFFIC_SCENARIOS, loadTrafficScenario, type TrafficScenario } from './traffic-scenarios.ts';
 import { ROAD_RULES, ROAD_EXAMPLES, APPROACHES, speedZoneAt } from './traffic-layout.ts';
@@ -31,6 +33,8 @@ const clock = new SimulationClock();
 const trafficSignals = new TrafficSignals();
 const traffic = new VehicleTraffic();
 let trafficPhysics: TrafficPhysics | undefined;
+let pedestrians: Pedestrians | undefined;
+const pedestriansEnabled = document.querySelector<HTMLInputElement>('#pedestrians-enabled')!;
 const trafficDensity = document.querySelector<HTMLSelectElement>('#traffic-density')!;
 const roadContext = document.querySelector<HTMLElement>('#road-context')!;
 const roadControl = document.querySelector<HTMLElement>('#road-control')!;
@@ -72,10 +76,12 @@ function interrupt() {
 function reset(spawn?: Spawn) {
   if (!physics) return;
   trafficPhysics?.clear();
+  pedestrians?.clear();
   physics.reset(spawn);
   trafficSignals.reset();
   if (trafficDensity.value === 'scenario') { traffic.density = 'light'; trafficDensity.value = 'light'; }
   traffic.reset(car);
+  pedestrians?.reset(pedestriansEnabled.checked);
   trafficPhysics?.sync(traffic.cars);
   clock.reset();
   driverInput.reset();
@@ -187,12 +193,26 @@ document.querySelector('#road-example')!.addEventListener('change', event => {
   if (scenario) {
     reset(scenario.spawn);
     trafficPhysics?.clear();
+    pedestrians?.reset(false);
     loadTrafficScenario(traffic, select.value as TrafficScenario);
     trafficDensity.value = 'scenario';
     trafficPhysics?.sync(traffic.cars);
     showNotice('Repeatable traffic scenario ready. Select Drive, or watch the encounter.');
   }
+  const pedestrianScenario = PEDESTRIAN_SCENARIOS[select.value as PedestrianScenario];
+  if (pedestrianScenario && pedestrians) {
+    reset(pedestrianScenario.spawn);
+    trafficPhysics?.clear();
+    loadPedestrianScenario(pedestrians, traffic, select.value as PedestrianScenario);
+    pedestriansEnabled.checked = true;
+    trafficDensity.value = 'scenario';
+    trafficPhysics?.sync(traffic.cars);
+    showNotice('Pedestrian encounter ready. Watch the crossing and yield before entering.');
+  }
   select.value = ''; canvas.focus();
+});
+pedestriansEnabled.addEventListener('change', () => {
+  pedestrians?.reset(pedestriansEnabled.checked); canvas.focus();
 });
 trafficDensity.addEventListener('change', () => {
   traffic.setDensity(trafficDensity.value as TrafficDensity, car);
@@ -354,6 +374,10 @@ function drawMap() {
     c.save(); c.translate(vehicle.x, vehicle.z); c.rotate(-vehicle.heading);
     c.fillStyle = vehicle.damage.condition === 'undamaged' ? '#577a96' : '#b56a38'; c.fillRect(-1.8, -3, 3.6, 6); c.restore();
   }
+  for (const p of pedestrians?.people ?? []) {
+    c.fillStyle = p.state === 'fallen' ? '#b54d38' : '#e5a534';
+    c.beginPath(); c.arc(p.x, p.z, 1.8, 0, Math.PI * 2); c.fill();
+  }
   c.translate(car.x, car.z);
   c.rotate(-car.heading);
   c.fillStyle = '#264d3b22';
@@ -377,6 +401,8 @@ async function start() {
   physics.damage.handlingEnabled = damageHandling.checked;
   car = physics.state;
   trafficPhysics = new TrafficPhysics(physics);
+  pedestrians = new Pedestrians(physics);
+  pedestrians.reset(pedestriansEnabled.checked);
   traffic.reset(car);
   trafficPhysics.sync(traffic.cars);
   clearInput();
@@ -400,12 +426,16 @@ async function start() {
     const input = driverInput.snapshot();
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
     clock.advance(dt, step => {
-      traffic.step(trafficSignals.seconds, car);
+      pedestrians!.beforeStep(trafficSignals.seconds, [...traffic.cars, car], step);
+      traffic.step(trafficSignals.seconds, car, pedestrians!.hazards(trafficSignals.seconds), pedestrians!.obstacles());
       trafficPhysics!.sync(traffic.cars);
       physics!.step(input, step);
       trafficPhysics!.afterStep(traffic, step);
+      pedestrians!.afterStep(step);
       trafficSignals.step();
     });
+    document.querySelector('#pedestrian-status')!.textContent = `${pedestrians!.people.length} pedestrians · ${pedestrians!.completed} crossings completed`;
+    const pedestrianImpacts = pedestrians!.drainEvents();
     const damagedTraffic = traffic.cars.filter(car => car.damage.condition !== 'undamaged').length;
     document.querySelector('#traffic-status')!.textContent = `${traffic.cars.length} vehicles · ${traffic.completed} routes completed${damagedTraffic ? ` · ${damagedTraffic} damaged` : ''}`;
     trafficPhysics!.drainEvents(); // Reserved for spatial traffic audio in Phase 11.
@@ -415,6 +445,7 @@ async function start() {
       const impact = impacts.reduce((strongest, event) => event.severity > strongest.severity ? event : strongest);
       showNotice(`${impact.severity > 0.2 ? 'Strong' : 'Light'} impact · ${impact.panel} panel. Repair is available.`);
     }
+    if (pedestrianImpacts.length) showNotice('Pedestrian collision. Stop and reset the encounter.');
     if (damageRevision !== damage.revision || handlingEnabled !== damage.handlingEnabled) {
       damageRevision = damage.revision;
       handlingEnabled = damage.handlingEnabled;
@@ -443,7 +474,7 @@ async function start() {
     const zone = isOnRoad(car.x, car.z) ? speedZoneAt(car) : undefined;
     roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
     roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
-    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars);
+    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people);
     drawMap();
   }
   requestAnimationFrame(frame);

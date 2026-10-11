@@ -58,7 +58,7 @@ export class TrafficPhysics {
       }
       const { body } = entry;
       body.resetForces(true); body.resetTorques(true);
-      if (car.stunnedFor > 0) { entry.lastHeading = car.heading; continue; }
+      if (car.parked || car.stunnedFor > 0) { entry.lastHeading = car.heading; continue; }
       const position = body.translation(), velocity = body.linvel(), heading = yaw(body.rotation());
       const headingError = angle(car.heading - heading);
       const dx = car.x - position.x, dz = car.z - position.z;
@@ -92,7 +92,7 @@ export class TrafficPhysics {
       car.recovering = car.stunnedFor > 0 || deviation > 0.65 || Math.abs(angle(desiredHeading - heading)) > 0.3;
       if (car.recovering) { car.arrivedAt = undefined; car.stoppedFor = 0; entry.recoveryTime += dt; }
       else entry.recoveryTime = 0;
-      if (entry.recoveryTime > TRAFFIC_COLLISIONS.recoverySeconds) {
+      if (!car.parked && entry.recoveryTime > TRAFFIC_COLLISIONS.recoverySeconds) {
         traffic.retire(car); this.remove(entry); this.bodies.delete(id);
       }
     }

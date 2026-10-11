@@ -12,7 +12,7 @@
       <canvas id="world" tabindex="0" aria-label="First-person driving simulator showing a suburban neighborhood"></canvas>
       <header class="topbar">
         <div class="identity"><span class="brand-mark" aria-hidden="true">d<span>e</span></span><div><h1>Drivers Ed<span class="brand-dot">.</span></h1><p>A little room to learn.</p></div></div>
-        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 08B</span></div>
+        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 09</span></div>
       </header>
       <section class="location" aria-label="Current environment"><span class="eyebrow">THE NEIGHBORHOOD</span><h2>Take the long way.</h2><p>A quiet block. An open road. Your own pace.</p></section>
       <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="420" aria-label="Map showing the car, expanded streets, practice lot, and test area"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
@@ -32,11 +32,16 @@
           <option value="traffic-stops">Traffic: simultaneous all-way stop</option>
           <option value="traffic-left">Traffic: left turn yields</option>
           <option value="traffic-yield">Traffic: through-route priority</option>
+          <option value="pedestrian-yield">Pedestrians: crossing and yielding</option>
+          <option value="pedestrian-occluded">Pedestrians: partially hidden crossing</option>
+          <option value="pedestrian-collision">Pedestrians: failure to yield</option>
           <option value="traffic-collision">Traffic: collision and damage</option>
         </select>
         <div class="traffic-options"><label for="traffic-density">Vehicle traffic</label>
         <select id="traffic-density" aria-label="Vehicle traffic"><option value="off">Off</option><option value="single">Single vehicle</option><option value="light" selected>Light · 6 vehicles</option><option value="busy">Busy · 16 vehicles</option><option value="scenario" disabled>Scenario vehicles</option></select>
-        <p id="traffic-status">Preparing traffic…</p></div>
+        <p id="traffic-status">Preparing traffic…</p>
+        <label><input id="pedestrians-enabled" type="checkbox" checked> Pedestrians at crossings</label>
+        <p id="pedestrian-status">Preparing pedestrians…</p></div>
       </aside>
       <div id="notice" role="status"></div>
       <aside id="mirrors" aria-label="Rear-facing mirrors, horizontally reflected">

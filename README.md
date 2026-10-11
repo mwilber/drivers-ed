@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 8b adds collisions that push and rotate traffic, damage both sedans, and let displaced drivers recover gradually. Phase 8's predictable traffic, following/braking, intersection priority, adjustable density, and repeatable encounters use Phase 7's US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 9's first increment adds crossing pedestrians, vehicle yielding, repeatable encounters, and finite-mass pedestrian collision responses. Phase 8b's dynamic traffic and mutual sedan damage remain available on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed cockpit after a traffic collision in Phase 8b](docs/screenshots/app-phase-8b.jpg)
+![Drivers Ed pedestrian crossing example in Phase 9](docs/screenshots/app-phase-9.jpg)
 
 ## Run locally
 
@@ -45,6 +45,8 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | View settings button | Adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
 | Try a road example selector | Reset in Park before signals, a stop/yield junction, or parallel parking; restart the signal cycle |
 | Traffic examples in the road example selector | Repeat following/signals, simultaneous stops, a permissive left turn, a yield encounter, or a collision with fixed traffic starts |
+| Pedestrian examples in the road example selector | Repeat crossing/yielding, partial occlusion, or failure to yield with fixed starts |
+| Pedestrians at crossings checkbox | Enable/reset three crossing pedestrians, or remove them in place |
 | Vehicle traffic selector | Off, a single vehicle, Light (up to 6), or Busy (up to 16); changes traffic in place |
 | Test area button | Reset upright on the approach to the suspension test ramp |
 | Repair car button | Restore appearance and handling in place, preserving position and motion |
@@ -107,7 +109,7 @@ The **T** area is east of the parking lot, connected through its southeast side.
 
 Rapier was selected for its [raycast vehicle controller](https://rapier.rs/javascript3d/classes/DynamicRayCastVehicleController.html) and [continuous collision detection](https://rapier.rs/docs/user_guides/javascript/rigid_body_ccd/), avoiding a custom 3D contact solver. The current implementation is still a simplified sedan: wheel contacts are rays rather than deformable tire shapes; all four contacts share drive force; there is no detailed tire model, suspension linkage geometry, crash deformation, or validated real-car calibration. Very sharp edges and extreme maneuvers may produce simplified responses. Use Reset if the car becomes stuck or overturned.
 
-The test suite checks flat-ground settling, performance targets, held steering and reverse transitions, the drive-in route, ramp ascent/descent, braking on a slope, asymmetric curb traversal, airborne contact loss and landing, glancing impacts, high-speed wall collision, repeated recovery, and deterministic frame-rate behavior. Phase 2's planar model remains only as an isolated controls/drivetrain reference; the browser uses the Rapier model. Traffic, pedestrians, objectives, audio, and detailed vehicle art remain future phases.
+The test suite checks flat-ground settling, performance targets, held steering and reverse transitions, the drive-in route, ramp ascent/descent, braking on a slope, asymmetric curb traversal, airborne contact loss and landing, glancing impacts, high-speed wall collision, repeated recovery, and deterministic frame-rate behavior. Phase 2's planar model remains only as an isolated controls/drivetrain reference; the browser uses the Rapier model. Vehicle traffic and the first pedestrian increment are described below; cyclists, objectives, audio, and detailed vehicle art remain future work.
 
 ## Phase 4 — Car damage and repair
 
@@ -160,7 +162,7 @@ The town uses **United States conventions and right-hand traffic**, as confirmed
 
 Use **Try a road example** to start before the town signals, lot all-way stop, Garden T-junction stop, east junction yield, or parallel parking bays. Selection resets the car undamaged in Park and restarts the signal cycle, while preserving view preferences and the damage-handling setting. The Test area and neighborhood Reset controls remain available.
 
-The controls use familiar [FHWA MUTCD sign, marking, and signal conventions](https://mutcd.fhwa.dot.gov/kno_11th_Editionr1.htm); the stop-line spacing follows the [MUTCD marking guidance](https://mutcd.fhwa.dot.gov/pdfs/11th_Edition/mutcd11thedition.pdf), and permissive left turns follow [FHWA's signal timing guidance](https://ops.fhwa.dot.gov/publications/fhwahop08024/chapter4.htm). Signal timing, speed-zone values, and placeholder dimensions are authored demonstration choices. Phase 8 adds AI compliance; pedestrians/cyclists remain Phase 9 work, and violation scoring and exercises remain Phase 13 work. The player's car is not automatically stopped at signs, restricted by signals, or governed to zone limits.
+The controls use familiar [FHWA MUTCD sign, marking, and signal conventions](https://mutcd.fhwa.dot.gov/kno_11th_Editionr1.htm); the stop-line spacing follows the [MUTCD marking guidance](https://mutcd.fhwa.dot.gov/pdfs/11th_Edition/mutcd11thedition.pdf), and permissive left turns follow [FHWA's signal timing guidance](https://ops.fhwa.dot.gov/publications/fhwahop08024/chapter4.htm). Signal timing, speed-zone values, and placeholder dimensions are authored demonstration choices. Phase 8 adds AI compliance; Phase 9 adds pedestrians first and cyclists later, and violation scoring and exercises remain Phase 13 work. The player's car is not automatically stopped at signs, restricted by signals, or governed to zone limits.
 
 Acceptance checks cover every lane and permitted turn path with a full sedan footprint in both generated driving-side orientations, turning radii above 5.7 m, connected routes, flush crossings, parking clearance, the selected US lane orientation, signs/stop lines/speed zones, signal phase boundaries and clearance, permissive left turns, rule metadata, front-bumper guidance, example spawns, physical sign impacts, and identical signal timing at 30/60/144 Hz. Existing driving, terrain, damage, and cockpit tests remain passing. Browser checks cover each example, manual approach/braking, signal and guidance agreement, settings pause/reset, and desktop/phone/landscape layouts.
 
@@ -190,6 +192,19 @@ The traffic chassis is deliberately grounded: it can move horizontally and yaw, 
 
 Acceptance checks cover proportional rear impacts, side displacement/yaw, head-on impacts, a moving AI car striking a stationary player, glancing scratches on both cars, resting-contact safeguards, gradual recovery without pose/velocity replacement, blocked recovery cleanup, pooled visual restoration, and identical collision/damage outcomes at 30/60/144 Hz. A ten-minute Busy run includes the player, up to 16 dynamic traffic cars, AI, and neighborhood physics, checks route completion without routine impacts, and reports shared-step cost (about 0.18 ms on the development host). This measurement is not a browser/device frame-rate guarantee. All 100 regression tests pass.
 
+## Phase 9 — Pedestrians (first playable increment)
+
+- Three placeholder pedestrians use existing flush crossing ramps at the Lot, Town, and Garden junctions. Each waits, crosses at about 1.2 m/s, pauses at the opposite curb, and walks back without teleporting. They check physical car positions, both travel directions, reversing traffic, and the player's approach before stepping out. Signalized crossings start only during a compatible vehicle phase with enough clearance; this increment has no WALK signal fixtures. Once crossing, pedestrians continue to the other curb.
+- AI sedans stop before requested/occupied crossings and resume after the pedestrian clears. Checks follow the incoming, turning, and outgoing route, including the far-side crossing. Fallen pedestrians also obstruct traffic at their actual positions. The player retains manual control and must yield.
+- A pedestrian is an authored 75 kg, 1.7 m dynamic capsule with full three-dimensional motion and CCD. Bounded walking and balance forces keep it upright during normal movement. Vehicle contact above 0.6 m/s inward speed and 8 N·s solver impulse disables those forces, allowing physical displacement, rotation, toppling, and sliding. Severe tipping also disables balance. The solver supplies impact momentum; no scripted shove, position snap, or automatic stand-up is applied. Higher-speed impacts produce greater movement. Moving pedestrians participate in the sedan's relative-velocity damage calculations.
+- Fallen actors remain physical for 20 simulation seconds before retirement. Reset restores the selected pedestrian setting and clears actors, contact registrations, and events before settling the player's chassis. **Pedestrians at crossings** independently removes actors or restores the three defaults in place. Pausing freezes simulation time; vehicle repair leaves pedestrians alone. Retired pedestrians are restored by reset or toggling the checkbox. Ordinary traffic remains separately adjustable.
+- Choose **Pedestrians: crossing and yielding** to watch a sedan stop for a curbside pedestrian. **Pedestrians: partially hidden crossing** places a parked, finite-mass sedan between the driver and the pedestrian's starting position; that prop can also move, rotate, and receive damage in a collision. **Pedestrians: failure to yield** starts just before an entered crossing: immediately selecting Drive and holding the accelerator repeats an impact. Re-select an example to restore it. Vehicle-only examples isolate their original fixtures; re-enable pedestrians with the checkbox if desired.
+- Placeholder people render in the world and existing mirrors, with walking limbs and a full physical orientation after falling. Amber map dots mark pedestrians; fallen dots turn rust-colored. A collision notice asks the driver to stop and reset the encounter. There is no injury score, gore, audio, or medical simulation.
+
+Acceptance checks cover safe gaps and signal clearance, upright repeated crossings on neighborhood ramps, physical AI stop/resume and turning-path yielding, player and AI impacts, proportional low/high impacts, glancing movement, 115 mph CCD, resting-contact safeguards, a ray-verified occluding sedan, ordinary Drive/accelerator collision playback, bounded retirement/reset/disable cleanup, and identical collision state/events at 30/60/144 Hz. A ten-minute Busy run with three pedestrians completes routes and crossings without routine collisions and reports shared-step cost (about 0.26 ms on the development host). This is a simulation measurement, not a browser/device frame-rate guarantee. All 113 tests pass, including the earlier 100 regression checks. Browser smoke checks cover desktop and 390 × 844 layouts, the pedestrian toggle, and collision playback using Drive and the accelerator.
+
+This is a simplified single-body pedestrian model, not an articulated ragdoll or validated human biomechanics. Gap acceptance uses nearby physical poses without modeling attention, sightline perception, or future turn intent; AI yields conservatively. Cyclists, bicycles, overtaking interactions, and rider/bicycle crash behavior are the separate next increment within Phase 9.
+
 ## Structure
 
 - `src/simulation.ts`: Gear-selection interlocks, switch timing, shared drivetrain forces, and the Phase 2 planar reference model, in metres/seconds/radians.
@@ -207,6 +222,9 @@ Acceptance checks cover proportional rear impacts, side displacement/yaw, head-o
 - `src/traffic-scenarios.ts`: Repeatable following, stop, left-turn, through-priority, and collision fixtures.
 - `src/traffic-physics.ts`: Dynamic traffic motors, physical pose reconciliation, collision recovery, and collider/damage lifecycle in the player's Rapier world.
 - `src/traffic-visuals.ts`: Pooled placeholder sedans with independent damage panels, brake lamps, and indicators.
+- `src/pedestrians.ts`: Crossing gap/phase decisions, bounded walking/balance forces, finite-mass contacts, and actor lifecycle.
+- `src/pedestrian-scenarios.ts`: Repeatable yielding, partial occlusion, and failure-to-yield fixtures.
+- `src/pedestrian-visuals.ts`: Pooled placeholder silhouettes and walking/fallen poses shared by cockpit and mirrors.
 - `src/road-visuals.ts`: Shared road markings, signs, arrows, support posts, and signal lenses.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
@@ -217,6 +235,7 @@ Acceptance checks cover proportional rear impacts, side displacement/yaw, head-o
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
+- `tests/pedestrians.test.mjs`: Crossing/yielding, impact response, occlusion, lifecycle, visual pose, frame-rate consistency, and sustained Busy traffic with pedestrians.
 - `tests/road-network.test.mjs`: Network connectivity, both driving sides, sedan/curb clearance, feasible turning radii, crossing openings, and parking geometry.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
@@ -316,15 +335,17 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Rear, side, head-on, and glancing impacts move traffic in a plausible direction and damage the contacting panels on both cars. Stronger impacts produce greater motion/damage; resting contact does not repeatedly dent either car. Recovery never teleports or overwrites collision velocity, blocked recovery releases stale route locks, and outcomes agree at 30/60/144 Hz. Earlier handling, road-rule, density, and route checks remain passing; measure the dynamic traffic cost at Busy density.
 
-### Phase 9 — Pedestrians and cyclists
+### Phase 9 — Pedestrians and cyclists (first pedestrian increment implemented; cyclists deferred)
 
 **Focus:** Add interactions with vulnerable road users separately from vehicle traffic development.
 
-- Begin with pedestrians using designated crossings and integrate vehicle yielding.
-- Add cyclists and their road interactions as a separate increment within this phase.
-- Keep movements and spawn locations consistent with visibility and road layout.
+- First increment: placeholder pedestrians walk between curb ramps at designated crossings, wait for safe gaps, and finish an entered crossing. Use simulation time for waiting, walking, and lifecycle behavior; offer independent pedestrian on/off control.
+- Integrate vehicle yielding before occupied/requested crossings, including incoming, turning, and outgoing paths. Pedestrians check both traffic directions and the player before stepping out; signalized crossings also wait for a compatible phase with enough clearance. Already-entered pedestrians retain priority.
+- Give pedestrians finite-mass dynamic colliders in the shared Rapier world, with bounded walking forces and CCD. Impacts must transfer motion, allow toppling and sliding, and disable walking without teleporting, snapping upright, or repeatedly applying a scripted collision impulse. Use restrained placeholder feedback; no gore or injury scoring.
+- Add repeatable yielding, partially occluded, and failure-to-yield encounters. Keep spawn points on flush crossing ramps and restore actors/colliders cleanly on reset or disable. Impacted actors remain physical for a bounded interval before retirement.
+- Separate cyclist increment: lane riding, vehicle clearance and yielding, repeatable overtaking/turn conflicts, and physical rider/bicycle collision responses. Riders and bicycles must be displaced, topple, and retain impact motion; no immovable bicycle props or instant route recovery. Cyclists are deferred until the pedestrian increment passes its checkpoint.
 
-**Testing checkpoint:** Crossing, yielding, and stopping behavior works in repeatable encounters, including partial occlusion and a player who fails to yield.
+**Testing checkpoint:** Pedestrians cross only in safe gaps, AI stops before the crossing and resumes after clearance, and turning traffic yields too. Repeatable partial occlusion and player/AI impacts exercise finite mass, displacement/toppling, low/high and glancing impacts, resting-contact safeguards, high-speed CCD, retirement/reset/disable cleanup, and identical state at 30/60/144 Hz. Earlier driving and traffic checks remain passing. Check cockpit/mirror visibility and measure Busy traffic with pedestrians.
 
 ### Phase 10 — Lighting, weather, and surface conditions
 
