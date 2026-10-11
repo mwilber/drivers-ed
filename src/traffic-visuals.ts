@@ -41,7 +41,7 @@ export function createTrafficVisuals(scene: THREE.Scene) {
   return {
     update(cars: readonly TrafficCar[], seconds: number, timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry') {
       for (const entry of groups) entry.group.visible = false;
-      cars.forEach((car, i) => {
+      cars.filter(car => car.kind === 'car').forEach((car, i) => {
         const entry = groups[i] ?? create(); entry.group.visible = true;
         entry.group.position.set(car.x, ROAD_HEIGHT, car.z); entry.group.rotation.y = car.heading;
         entry.damage.update(car.damage);

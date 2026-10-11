@@ -5,6 +5,8 @@ import { ACTIONS, ACTION_LABELS, DriverInput, keyLabel, type Action } from './dr
 import { createVehiclePhysics, type Spawn, type VehiclePhysics } from './vehicle-physics.ts';
 import { TrafficSignals, upcomingControl, controlGuidance } from './traffic-rules.ts';
 import { VehicleTraffic, type TrafficDensity } from './vehicle-traffic.ts';
+import { CyclistPhysics } from './cyclist-physics.ts';
+import { CYCLIST_SCENARIOS, loadCyclistScenario, type CyclistScenario } from './cyclist-scenarios.ts';
 import { Pedestrians } from './pedestrians.ts';
 import { PEDESTRIAN_SCENARIOS, loadPedestrianScenario, type PedestrianScenario } from './pedestrian-scenarios.ts';
 import { TrafficPhysics } from './traffic-physics.ts';
@@ -38,6 +40,8 @@ const traffic = new VehicleTraffic();
 const windshield = new WindshieldRain();
 let trafficPhysics: TrafficPhysics | undefined;
 let pedestrians: Pedestrians | undefined;
+let cyclists: CyclistPhysics | undefined;
+const cyclistsEnabled = document.querySelector<HTMLInputElement>('#cyclists-enabled')!;
 const pedestriansEnabled = document.querySelector<HTMLInputElement>('#pedestrians-enabled')!;
 const trafficDensity = document.querySelector<HTMLSelectElement>('#traffic-density')!;
 const roadContext = document.querySelector<HTMLElement>('#road-context')!;
@@ -92,13 +96,16 @@ function reset(spawn?: Spawn) {
   if (!physics) return;
   trafficPhysics?.clear();
   pedestrians?.clear();
+  cyclists?.clear();
   physics.reset(spawn);
   windshield.reset();
   trafficSignals.reset();
   if (trafficDensity.value === 'scenario') { traffic.density = 'light'; trafficDensity.value = 'light'; }
+  traffic.cyclistsEnabled = cyclistsEnabled.checked;
   traffic.reset(car);
   pedestrians?.reset(pedestriansEnabled.checked);
   trafficPhysics?.sync(traffic.cars);
+  cyclists?.sync(traffic.cars);
   clock.reset();
   driverInput.reset();
   clearInput();
@@ -233,6 +240,8 @@ document.querySelector('#road-example')!.addEventListener('change', event => {
   if (scenario) {
     reset(scenario.spawn);
     trafficPhysics?.clear();
+    cyclists?.clear();
+    traffic.setCyclists(false);
     pedestrians?.reset(false);
     loadTrafficScenario(traffic, select.value as TrafficScenario);
     trafficDensity.value = 'scenario';
@@ -243,13 +252,28 @@ document.querySelector('#road-example')!.addEventListener('change', event => {
   if (pedestrianScenario && pedestrians) {
     reset(pedestrianScenario.spawn);
     trafficPhysics?.clear();
+    cyclists?.clear();
+    traffic.setCyclists(false);
     loadPedestrianScenario(pedestrians, traffic, select.value as PedestrianScenario);
     pedestriansEnabled.checked = true;
     trafficDensity.value = 'scenario';
     trafficPhysics?.sync(traffic.cars);
     showNotice('Pedestrian encounter ready. Watch the crossing and yield before entering.');
   }
+  const cyclistScenario = CYCLIST_SCENARIOS[select.value as CyclistScenario];
+  if (cyclistScenario && cyclists) {
+    reset(cyclistScenario.spawn);
+    trafficPhysics?.clear(); cyclists.clear(); pedestrians?.reset(false);
+    loadCyclistScenario(traffic, select.value as CyclistScenario);
+    cyclistsEnabled.checked = true;
+    trafficDensity.value = 'scenario';
+    trafficPhysics?.sync(traffic.cars); cyclists.sync(traffic.cars);
+    showNotice('Cyclist encounter ready. Leave passing space and yield at turns.');
+  }
   select.value = ''; canvas.focus();
+});
+cyclistsEnabled.addEventListener('change', () => {
+  cyclists?.clear(); traffic.setCyclists(cyclistsEnabled.checked, car); cyclists?.sync(traffic.cars); canvas.focus();
 });
 pedestriansEnabled.addEventListener('change', () => {
   pedestrians?.reset(pedestriansEnabled.checked); canvas.focus();
@@ -416,9 +440,13 @@ function drawMap() {
   c.fillText('15 MPH', -50, 160);
   c.fillText('25 MPH', -50, 4);
   c.fillText('P', 107, 118);
-  for (const vehicle of traffic.cars) {
+  for (const vehicle of traffic.vehicles) {
     c.save(); c.translate(vehicle.x, vehicle.z); c.rotate(-vehicle.heading);
     c.fillStyle = vehicle.damage.condition === 'undamaged' ? '#577a96' : '#b56a38'; c.fillRect(-1.8, -3, 3.6, 6); c.restore();
+  }
+  for (const rider of cyclists?.riders ?? []) {
+    c.fillStyle = rider.state === 'fallen' ? '#b54d38' : '#2b9aa4';
+    c.save(); c.translate(rider.actor.x, rider.actor.z); c.rotate(-rider.actor.heading); c.fillRect(-1, -2.5, 2, 5); c.restore();
   }
   for (const p of pedestrians?.people ?? []) {
     c.fillStyle = p.state === 'fallen' ? '#b54d38' : '#e5a534';
@@ -449,9 +477,12 @@ async function start() {
   car = physics.state;
   trafficPhysics = new TrafficPhysics(physics);
   pedestrians = new Pedestrians(physics);
+  cyclists = new CyclistPhysics(physics, traffic);
+  traffic.cyclistsEnabled = cyclistsEnabled.checked;
   pedestrians.reset(pedestriansEnabled.checked);
   traffic.reset(car);
   trafficPhysics.sync(traffic.cars);
+  cyclists.sync(traffic.cars);
   clearInput();
   document.querySelector('#road-jurisdiction')!.textContent = `${ROAD_RULES.jurisdiction} · keep right`;
   showNotice(`Ready. Select Drive (${driverInput.bindings.drive.map(keyLabel).join(' / ')}), then accelerate (${driverInput.bindings.forward.map(keyLabel).join(' / ')}).`);
@@ -477,18 +508,22 @@ async function start() {
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
     clock.advance(dt, step => {
       windshield.step(step, conditions.weather, conditions.wipers);
-      pedestrians!.beforeStep(trafficSignals.seconds, [...traffic.cars, car], step);
-      traffic.step(trafficSignals.seconds, car, pedestrians!.hazards(trafficSignals.seconds), pedestrians!.obstacles());
+      pedestrians!.beforeStep(trafficSignals.seconds, [...traffic.cars, ...cyclists!.obstacles(), car], step);
+      traffic.step(trafficSignals.seconds, car, pedestrians!.hazards(trafficSignals.seconds), [...pedestrians!.obstacles(), ...cyclists!.obstacles()]);
       trafficPhysics!.sync(traffic.cars);
+      cyclists!.sync(traffic.cars);
       physics!.step(input, step);
       trafficPhysics!.afterStep(traffic, step);
       pedestrians!.afterStep(step);
+      cyclists!.afterStep(step);
       trafficSignals.step();
     });
     document.querySelector('#pedestrian-status')!.textContent = `${pedestrians!.people.length} pedestrians · ${pedestrians!.completed} crossings completed`;
+    document.querySelector('#cyclist-status')!.textContent = `${cyclists!.count} cyclists · ${traffic.completedCyclists} routes completed`;
+    const cyclistImpacts = cyclists!.drainEvents();
     const pedestrianImpacts = pedestrians!.drainEvents();
-    const damagedTraffic = traffic.cars.filter(car => car.damage.condition !== 'undamaged').length;
-    document.querySelector('#traffic-status')!.textContent = `${traffic.cars.length} vehicles · ${traffic.completed} routes completed${damagedTraffic ? ` · ${damagedTraffic} damaged` : ''}`;
+    const damagedTraffic = traffic.vehicles.filter(car => car.damage.condition !== 'undamaged').length;
+    document.querySelector('#traffic-status')!.textContent = `${traffic.vehicles.length} vehicles · ${traffic.completed} routes completed${damagedTraffic ? ` · ${damagedTraffic} damaged` : ''}`;
     trafficPhysics!.drainEvents(); // Reserved for spatial traffic audio in Phase 11.
     const damage = physics!.damage;
     const impacts = damage.drainEvents().filter(event => event.kind === 'impact');
@@ -496,6 +531,7 @@ async function start() {
       const impact = impacts.reduce((strongest, event) => event.severity > strongest.severity ? event : strongest);
       showNotice(`${impact.severity > 0.2 ? 'Strong' : 'Light'} impact · ${impact.panel} panel. Repair is available.`);
     }
+    if (cyclistImpacts.length) showNotice('Cyclist collision. Stop and reset the encounter.');
     if (pedestrianImpacts.length) showNotice('Pedestrian collision. Stop and reset the encounter.');
     if (damageRevision !== damage.revision || handlingEnabled !== damage.handlingEnabled) {
       damageRevision = damage.revision;
@@ -525,9 +561,9 @@ async function start() {
     const zone = isOnRoad(car.x, car.z) ? speedZoneAt(car) : undefined;
     roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
     roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
-    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay, conditions.weather, windshield);
+    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay, conditions.weather, windshield, cyclists!.riders);
     drawMap();
-    profile?.record(`${conditions.timeOfDay}, ${conditions.weather}, wipers ${conditions.wipers}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}`, intervalMs, performance.now() - frameStart);
+    profile?.record(`${conditions.timeOfDay}, ${conditions.weather}, wipers ${conditions.wipers}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}, cyclists ${cyclists!.count}`, intervalMs, performance.now() - frameStart);
   }
   requestAnimationFrame(frame);
 }

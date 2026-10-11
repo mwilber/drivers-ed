@@ -34,6 +34,7 @@ export class TrafficPhysics {
     this.physics.world.removeRigidBody(body);
   }
   sync(cars: readonly TrafficCar[], dt = FIXED_STEP): void {
+    cars = cars.filter(car => car.kind === 'car');
     const active = new Set(cars.map(car => car.id));
     for (const [id, entry] of this.bodies) if (!active.has(id)) { this.remove(entry); this.bodies.delete(id); }
     for (const car of cars) {

@@ -32,6 +32,9 @@
           <option value="traffic-stops">Traffic: simultaneous all-way stop</option>
           <option value="traffic-left">Traffic: left turn yields</option>
           <option value="traffic-yield">Traffic: through-route priority</option>
+          <option value="cyclist-passing">Cyclists: following and passing</option>
+          <option value="cyclist-turn">Cyclists: left-turn conflict</option>
+          <option value="cyclist-collision">Cyclists: collision and fall</option>
           <option value="pedestrian-yield">Pedestrians: crossing and yielding</option>
           <option value="pedestrian-occluded">Pedestrians: partially hidden crossing</option>
           <option value="pedestrian-collision">Pedestrians: failure to yield</option>
@@ -41,7 +44,9 @@
         <select id="traffic-density" aria-label="Vehicle traffic"><option value="off">Off</option><option value="single">Single vehicle</option><option value="light" selected>Light · 6 vehicles</option><option value="busy">Busy · 16 vehicles</option><option value="scenario" disabled>Scenario vehicles</option></select>
         <p id="traffic-status">Preparing traffic…</p>
         <label><input id="pedestrians-enabled" type="checkbox" checked> Pedestrians at crossings</label>
-        <p id="pedestrian-status">Preparing pedestrians…</p></div>
+        <p id="pedestrian-status">Preparing pedestrians…</p>
+        <label><input id="cyclists-enabled" type="checkbox" checked> Cyclists on roads</label>
+        <p id="cyclist-status">Preparing cyclists…</p></div>
       </aside>
       <div id="notice" role="status"></div>
       <aside id="mirrors" aria-label="Rear-facing mirrors, horizontally reflected">

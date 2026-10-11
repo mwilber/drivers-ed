@@ -21,13 +21,14 @@ export function crossingSafe(c: Crossing, actors: readonly TrafficActor[]): bool
   const clearance = (crossingSpan(c) * 2 / PEDESTRIAN.clearanceSpeed) + 1.5;
   return !actors.some(actor => {
     const dx = c.x - actor.x, dz = c.z - actor.z;
-    if (Math.abs(dx) < c.width / 2 + CAR.length / 2 && Math.abs(dz) < c.depth / 2 + CAR.length / 2) return true;
+    const length = actor.length ?? CAR.length, width = actor.width ?? CAR.width;
+    if (Math.abs(dx) < c.width / 2 + length / 2 && Math.abs(dz) < c.depth / 2 + length / 2) return true;
     const direction = Math.sign(actor.speed) || 1;
     const ux = -Math.sin(actor.heading) * direction, uz = -Math.cos(actor.heading) * direction;
     const along = dx * ux + dz * uz;
     const lateral = Math.abs(-dx * uz + dz * ux);
-    const extent = Math.abs(uz) * c.width / 2 + Math.abs(ux) * c.depth / 2 + CAR.width;
-    return lateral < extent && along > 0 && along < CAR.length / 2 + Math.abs(actor.speed) * clearance;
+    const extent = Math.abs(uz) * c.width / 2 + Math.abs(ux) * c.depth / 2 + width;
+    return lateral < extent && along > 0 && along < length / 2 + Math.abs(actor.speed) * clearance;
   });
 }
 
@@ -65,7 +66,7 @@ export class Pedestrians {
     this.people.push(person);
     this.physics.registerContactBody(body, contacts => {
       if (person.state === 'fallen') return;
-      const impact = contacts.some(c => c.material === 'vehicle' && c.impulse > 8 && c.closingSpeed > 0.6);
+      const impact = contacts.some(c => ['vehicle', 'bicycle', 'rider'].includes(c.material) && c.impulse > 8 && c.closingSpeed > 0.6);
       const q = body.rotation(), up = 1 - 2 * (q.x ** 2 + q.z ** 2);
       if (!impact && up > 0.65) return;
       person.state = 'fallen'; body.resetForces(true); body.resetTorques(true);

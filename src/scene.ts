@@ -7,6 +7,8 @@ import type { VehiclePhysics } from './vehicle-physics.ts';
 import { CAR, SUSPENSION } from './vehicle-config.ts';
 import { createTrafficVisuals } from './traffic-visuals.ts';
 import type { TrafficCar } from './vehicle-traffic.ts';
+import { createCyclistVisuals } from './cyclist-visuals.ts';
+import type { CyclistBody } from './cyclist-physics.ts';
 import { createPedestrianVisuals } from './pedestrian-visuals.ts';
 import { createDrivingLighting } from './driving-lighting.ts';
 import type { TimeOfDay } from './driving-conditions.ts';
@@ -77,6 +79,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   }
   const roadVisuals = createRoadVisuals(scene);
   const trafficVisuals = createTrafficVisuals(scene);
+  const cyclistVisuals = createCyclistVisuals(scene);
   const pedestrianVisuals = createPedestrianVisuals(scene);
 
   for (const house of HOUSES) {
@@ -200,7 +203,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry', windshield = emptyWindshield) {
+    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry', windshield = emptyWindshield, cyclists: readonly CyclistBody[] = []) {
       lighting.update(timeOfDay, state.headlights, physics.position, physics.rotation, weather);
       weatherVisuals.update(weather, trafficTime, physics.position, windshield);
       material(0x596168).roughness = weather === 'rain' ? 0.42 : 0.92;
@@ -208,6 +211,7 @@ export function createScene(canvas: HTMLCanvasElement) {
       roadVisuals.update(trafficTime);
       trafficVisuals.update(traffic, trafficTime, timeOfDay, weather);
       pedestrianVisuals.update(pedestrians, trafficTime);
+      cyclistVisuals.update(cyclists, trafficTime, timeOfDay, weather);
       damageVisuals.update(physics.damage);
       for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
       for (const lamp of rearLampMaterials) lamp.emissiveIntensity = state.brake > 0.05 ? 2 : state.headlights ? 0.6 : 0;
