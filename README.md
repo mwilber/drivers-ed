@@ -2,6 +2,8 @@
 
 A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 7 adds US road controls, working signals, shared lane connections, crossings and parking examples in an expanded southern neighborhood. The Rapier sedan retains Phase 6's shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
+![Drivers Ed cockpit and expanded neighborhood in Phase 7](docs/screenshots/app-phase-7.jpg)
+
 ## Run locally
 
 Requires Node.js 22.18+ (or Node.js 24) and npm.
