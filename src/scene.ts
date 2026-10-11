@@ -203,6 +203,9 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
+    audioListenerPose() {
+      return { point: camera.position.clone(), forward: camera.getWorldDirection(new THREE.Vector3()), up: new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion) };
+    },
     render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry', windshield = emptyWindshield, cyclists: readonly CyclistBody[] = []) {
       lighting.update(timeOfDay, state.headlights, physics.position, physics.rotation, weather);
       weatherVisuals.update(weather, trafficTime, physics.position, windshield);

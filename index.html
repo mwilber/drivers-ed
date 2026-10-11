@@ -12,7 +12,7 @@
       <canvas id="world" tabindex="0" aria-label="First-person driving simulator showing a suburban neighborhood"></canvas>
       <header class="topbar">
         <div class="identity"><span class="brand-mark" aria-hidden="true">d<span>e</span></span><div><h1>Drivers Ed<span class="brand-dot">.</span></h1><p>A little room to learn.</p></div></div>
-        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 10</span></div>
+        <div class="session"><span class="live-dot"></span> FREE DRIVE <span class="separator">/</span> <span class="phase">PHASE 11</span></div>
       </header>
       <section class="location" aria-label="Current environment"><span class="eyebrow">THE NEIGHBORHOOD</span><h2>Take the long way.</h2><p>A quiet block. An open road. Your own pace.</p></section>
       <aside class="map-panel" aria-label="Neighborhood map"><div class="map-title"><span>YOUR NEIGHBORHOOD</span><span>N ↑</span></div><canvas id="map" width="480" height="420" aria-label="Map showing the car, expanded streets, practice lot, and test area"></canvas><div class="map-footer"><span class="map-dot"></span> You are here <span>01 / SANDBOX</span></div></aside>
@@ -83,9 +83,24 @@
         </div>
         <p id="switch-state">Parking brake OFF · Lights OFF</p>
         <div class="weather-controls"><p id="conditions-status" role="status">Day · dry roads</p><button id="wipers" type="button" aria-label="Cycle windshield wipers (Off, Slow, Fast)" disabled>Wipers parked</button></div>
-        <div class="signal-state" aria-label="Indicator lamps"><span id="indicator-left" aria-label="Left indicator lamp">◀</span><span id="horn-state" role="status">Horn ready · sound in phase 11</span><span id="indicator-right" aria-label="Right indicator lamp">▶</span></div>
-        <button id="settings" type="button">Keyboard bindings</button>
+        <div class="signal-state" aria-label="Indicator lamps"><span id="indicator-left" aria-label="Left indicator lamp">◀</span><span id="horn-state" role="status">Horn ready</span><span id="indicator-right" aria-label="Right indicator lamp">▶</span></div>
+        <div class="driver-settings"><button id="settings" type="button">Keyboard bindings</button><button id="sound-toggle" type="button" aria-pressed="false">Enable sound</button><button id="audio-settings" type="button">Sound settings</button></div>
       </aside>
+      <dialog id="audio-dialog" aria-labelledby="audio-title">
+        <h2 id="audio-title">Driving sound</h2>
+        <p>Use Enable sound to activate audio. Driving pauses while settings are open.</p>
+        <label class="view-check"><input id="audio-muted" type="checkbox" /> Mute all sound</label>
+        <label for="audio-master">Overall volume <output id="audio-value-master" for="audio-master"></output></label>
+        <input id="audio-master" type="range" min="0" max="1" step="0.01" />
+        <label for="audio-vehicle">Engine, transmission &amp; tires <output id="audio-value-vehicle" for="audio-vehicle"></output></label>
+        <input id="audio-vehicle" type="range" min="0" max="1" step="0.01" />
+        <label for="audio-effects">Horn, indicators &amp; collisions <output id="audio-value-effects" for="audio-effects"></output></label>
+        <input id="audio-effects" type="range" min="0" max="1" step="0.01" />
+        <label for="audio-environment">Nearby traffic, wind &amp; rain <output id="audio-value-environment" for="audio-environment"></output></label>
+        <input id="audio-environment" type="range" min="0" max="1" step="0.01" />
+        <p id="audio-message" role="status">Sound preferences save on this device when browser storage is available.</p>
+        <div class="binding-actions"><button id="default-audio" type="button">Restore defaults</button><button id="close-audio" type="button">Return to driving</button></div>
+      </dialog>
       <dialog id="bindings-dialog" aria-labelledby="bindings-title">
         <h2 id="bindings-title">Keyboard bindings</h2>
         <p>Choose a control, then press its new key. Buttons and touch pedals stay available.</p>

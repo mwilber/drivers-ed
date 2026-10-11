@@ -16,6 +16,8 @@ export interface DamageContact {
   material: string;
 }
 export interface DamageEvent {
+  /** Stable contact identity, so simultaneous scrapes can end independently. */
+  obstacle: number;
   kind: 'impact' | 'scrape-start' | 'scrape' | 'scrape-end';
   time: number;
   panel: DamagePanel;
@@ -59,7 +61,7 @@ export class VehicleDamage {
       const panel = damagePanelAt(sample.localPoint, sample.localNormal);
       const damage = this.panels[panel];
       const event = (kind: DamageEvent['kind'], severity: number): DamageEvent => ({
-        kind, time: this.time, panel, severity, point: { ...sample.point }, normal: { ...sample.normal }, material: sample.material,
+        obstacle: sample.obstacle, kind, time: this.time, panel, severity, point: { ...sample.point }, normal: { ...sample.normal }, material: sample.material,
       });
       // Require both inward motion and a solver impulse. Support/resting forces alone cannot damage paint.
       if (history.armed && sample.closingSpeed >= DAMAGE.minimumImpactSpeed && sample.impulse > CAR.mass * 0.15 && this.time - history.lastImpact >= DAMAGE.impactCooldown) {
@@ -100,7 +102,7 @@ export class VehicleDamage {
     if (history.scrape) this.emit({ ...history.scrape, kind: 'scrape-end', time: this.time, severity: 0 });
     history.scrape = undefined;
   }
-  /** Consume once per render frame (or by a future audio system). */
+  /** Consume once per simulation tick; share the result with notices and audio. */
   drainEvents(): DamageEvent[] { const events = this.events; this.events = []; return events; }
   pause(): void { for (const history of this.contacts.values()) this.endScrape(history); }
   repair(): void {

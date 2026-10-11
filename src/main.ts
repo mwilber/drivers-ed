@@ -13,11 +13,13 @@ import { TrafficPhysics } from './traffic-physics.ts';
 import { TRAFFIC_SCENARIOS, loadTrafficScenario, type TrafficScenario } from './traffic-scenarios.ts';
 import { ROAD_RULES, ROAD_EXAMPLES, APPROACHES, speedZoneAt } from './traffic-layout.ts';
 import { SimulationClock } from './simulation-clock.ts';
-import { DAMAGE_PANELS } from './vehicle-damage.ts';
+import { DAMAGE_PANELS, type DamageEvent } from './vehicle-damage.ts';
 import { DEFAULT_VIEW, HeadLook, loadView, serializeView, type ViewSettings } from './cockpit.ts';
 import { loadConditions, serializeConditions, lightingGuidance, WIPERS, type DrivingConditions } from './driving-conditions.ts';
 import { WindshieldRain } from './windshield-rain.ts';
 import { RenderProfile } from './render-profile.ts';
+import { DrivingAudioModel, AUDIO_CHANNELS, loadAudio, serializeAudio, type AudioSettings } from './driving-audio.ts';
+import { DrivingAudio } from './audio-output.ts';
 import { HOUSES, isOnRoad, PARKING_LOT, PARKING_MARKINGS, PAVED_SURFACES, TEST_AREA, TEST_CURB, TEST_RAMP, TREES, WORLD_BOUNDS } from './world-layout.ts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
@@ -48,6 +50,15 @@ const roadContext = document.querySelector<HTMLElement>('#road-context')!;
 const roadControl = document.querySelector<HTMLElement>('#road-control')!;
 const driverInput = new DriverInput();
 const headLook = new HeadLook();
+const audioModel = new DrivingAudioModel();
+const audio = new DrivingAudio();
+const audioStorageKey = 'drivers-ed.audio.v1';
+let audioSettings: AudioSettings = loadAudio(null);
+try { audioSettings = loadAudio(localStorage.getItem(audioStorageKey)); } catch { /* Audio works without storage. */ }
+audio.setSettings(audioSettings);
+const soundButton = document.querySelector<HTMLButtonElement>('#sound-toggle')!;
+const audioDialog = document.querySelector<HTMLDialogElement>('#audio-dialog')!;
+const audioMessage = document.querySelector<HTMLElement>('#audio-message')!;
 const viewStorageKey = 'drivers-ed.view.v1';
 let view: ViewSettings = { ...DEFAULT_VIEW };
 try { view = loadView(localStorage.getItem(viewStorageKey)); } catch { /* Session defaults work without storage. */ }
@@ -90,10 +101,14 @@ function interrupt() {
   clearInput();
   physics?.pause();
   trafficPhysics?.pause();
+  audioModel.reset();
+  audio.setPaused(true);
   clock.reset();
 }
 function reset(spawn?: Spawn) {
   if (!physics) return;
+  audioModel.reset();
+  audio.clear();
   trafficPhysics?.clear();
   pedestrians?.clear();
   cyclists?.clear();
@@ -141,6 +156,46 @@ function renderBindings() {
   }
 }
 renderBindings();
+function renderAudioSettings() {
+  soundButton.textContent = audio.status;
+  soundButton.setAttribute('aria-pressed', String(!audioSettings.muted && audio.status === 'Sound on'));
+  document.querySelector<HTMLInputElement>('#audio-muted')!.checked = audioSettings.muted;
+  for (const channel of ['master', ...AUDIO_CHANNELS] as const) {
+    document.querySelector<HTMLInputElement>(`#audio-${channel}`)!.value = String(audioSettings[channel]);
+    document.querySelector<HTMLOutputElement>(`#audio-value-${channel}`)!.value = `${Math.round(audioSettings[channel] * 100)}%`;
+  }
+}
+function saveAudio() {
+  audio.setSettings(audioSettings);
+  try { localStorage.setItem(audioStorageKey, serializeAudio(audioSettings)); audioMessage.textContent = 'Sound preferences saved.'; }
+  catch { audioMessage.textContent = 'Sound preferences apply for this session; browser storage is unavailable.'; }
+  renderAudioSettings();
+}
+renderAudioSettings();
+soundButton.addEventListener('click', () => {
+  if (audio.status === 'Sound on') { audioSettings.muted = true; saveAudio(); }
+  else {
+    audioSettings.muted = false; saveAudio();
+    void audio.activate().then(renderAudioSettings);
+  }
+  canvas.focus({ preventScroll: true });
+});
+document.querySelector('#audio-settings')!.addEventListener('click', () => {
+  suspended = true; interrupt(); renderAudioSettings(); audioDialog.showModal();
+});
+document.querySelector('#close-audio')!.addEventListener('click', () => audioDialog.close());
+audioDialog.addEventListener('close', () => {
+  suspended = false; interrupt(); canvas.focus({ preventScroll: true });
+});
+document.querySelector<HTMLInputElement>('#audio-muted')!.addEventListener('change', event => {
+  audioSettings.muted = (event.target as HTMLInputElement).checked; saveAudio();
+});
+for (const channel of ['master', ...AUDIO_CHANNELS] as const) {
+  document.querySelector<HTMLInputElement>(`#audio-${channel}`)!.addEventListener('input', event => {
+    audioSettings[channel] = Number((event.target as HTMLInputElement).value); saveAudio();
+  });
+}
+document.querySelector('#default-audio')!.addEventListener('click', () => { audioSettings = loadAudio(null); saveAudio(); });
 function renderViewSettings() {
   for (const key of ['fov', 'eyeHeight', 'seatZ'] as const) {
     document.querySelector<HTMLInputElement>(`#view-${key}`)!.value = String(view[key]);
@@ -285,6 +340,8 @@ trafficDensity.addEventListener('change', () => {
 });
 repairButton.addEventListener('click', () => {
   physics?.repair();
+  audioModel.clearSource('player');
+  audio.clear();
   canvas.focus();
   showNotice('Car repaired. Appearance and handling restored.');
 });
@@ -386,7 +443,7 @@ function updateControlDisplay() {
   document.querySelector('#indicator-left')!.classList.toggle('lit', lit && (car.indicator === 'left' || car.indicator === 'hazards'));
   document.querySelector('#indicator-right')!.classList.toggle('lit', lit && (car.indicator === 'right' || car.indicator === 'hazards'));
   const hornState = document.querySelector('#horn-state')!;
-  const hornText = car.horn ? 'HORN ACTIVE' : 'Horn ready · sound in phase 11';
+  const hornText = car.horn ? 'HORN ACTIVE' : 'Horn ready';
   if (hornState.textContent !== hornText) hornState.textContent = hornText;
   document.querySelector('#switch-state')!.textContent = `${car.parkingBrake ? 'Parking brake ON' : 'Parking brake OFF'} · Lights ${car.headlights ? 'ON' : 'OFF'}`;
   const conditionStatus = document.querySelector('#conditions-status')!;
@@ -503,9 +560,12 @@ async function start() {
     const intervalMs = time - lastTime;
     const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
-    if (document.hidden || suspended || windowBlurred || lostContext) { clock.reset(); profile?.pause(); return; }
+    if (document.hidden || suspended || windowBlurred || lostContext) { audio.setPaused(true); clock.reset(); profile?.pause(); return; }
+    audio.setPaused(false);
+    if (soundButton.textContent !== audio.status) renderAudioSettings();
     const input = driverInput.snapshot();
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
+    const damageEvents: DamageEvent[] = [];
     clock.advance(dt, step => {
       windshield.step(step, conditions.weather, conditions.wipers);
       pedestrians!.beforeStep(trafficSignals.seconds, [...traffic.cars, ...cyclists!.obstacles(), car], step);
@@ -517,6 +577,20 @@ async function start() {
       pedestrians!.afterStep(step);
       cyclists!.afterStep(step);
       trafficSignals.step();
+      let grounded = 0, paved = 0;
+      for (let i = 0; i < physics!.wheels.length; i++) {
+        if (!physics!.wheels[i]!.contact) continue;
+        grounded++;
+        const point = physics!.vehicle.wheelContactPoint(i);
+        if (point && isOnRoad(point.x, point.z)) paved++;
+      }
+      const velocity = physics!.body.linvel();
+      audioModel.step({ car, grounded: grounded / 4, paved: grounded ? paved / grounded : 0,
+        lateralSpeed: velocity.x * Math.cos(car.heading) - velocity.z * Math.sin(car.heading), weather: conditions.weather, traffic: traffic.vehicles }, step);
+      const events = physics!.damage.drainEvents();
+      damageEvents.push(...events);
+      audioModel.damageEvents('player', events);
+      for (const { carId, event } of trafficPhysics!.drainEvents()) audioModel.damageEvents(`traffic:${carId}`, [event]);
     });
     document.querySelector('#pedestrian-status')!.textContent = `${pedestrians!.people.length} pedestrians · ${pedestrians!.completed} crossings completed`;
     document.querySelector('#cyclist-status')!.textContent = `${cyclists!.count} cyclists · ${traffic.completedCyclists} routes completed`;
@@ -524,9 +598,8 @@ async function start() {
     const pedestrianImpacts = pedestrians!.drainEvents();
     const damagedTraffic = traffic.vehicles.filter(car => car.damage.condition !== 'undamaged').length;
     document.querySelector('#traffic-status')!.textContent = `${traffic.vehicles.length} vehicles · ${traffic.completed} routes completed${damagedTraffic ? ` · ${damagedTraffic} damaged` : ''}`;
-    trafficPhysics!.drainEvents(); // Reserved for spatial traffic audio in Phase 11.
     const damage = physics!.damage;
-    const impacts = damage.drainEvents().filter(event => event.kind === 'impact');
+    const impacts = damageEvents.filter(event => event.kind === 'impact');
     if (impacts.length) {
       const impact = impacts.reduce((strongest, event) => event.severity > strongest.severity ? event : strongest);
       showNotice(`${impact.severity > 0.2 ? 'Strong' : 'Light'} impact · ${impact.panel} panel. Repair is available.`);
@@ -562,11 +635,13 @@ async function start() {
     roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
     roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
     scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay, conditions.weather, windshield, cyclists!.riders);
+    audio.update(audioModel.loops, audioModel.drainCues(), scene.audioListenerPose());
     drawMap();
     profile?.record(`${conditions.timeOfDay}, ${conditions.weather}, wipers ${conditions.wipers}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}, cyclists ${cyclists!.count}`, intervalMs, performance.now() - frameStart);
   }
   requestAnimationFrame(frame);
 }
+window.addEventListener('pagehide', () => { audioModel.reset(); audio.dispose(); });
 void start().catch(error => {
   console.error(error);
   showError('The graphics or physics engine could not start. Use a browser with WebGL 2 and WebAssembly enabled, then reload.');

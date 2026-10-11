@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 10 adds configurable day, dusk, and night lighting, shadowed headlights, rain, wet-road grip, reduced visibility, and windshield wipers. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 11 adds procedural engine, transmission, tire/surface, horn, indicator, impact, scrape, nearby traffic, wind, and rain audio with saved volume controls. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed in rain with working windshield wipers in Phase 10](docs/screenshots/app-phase-10-rain.jpg)
+![Drivers Ed Phase 11 driving sound settings](docs/screenshots/app-phase-11-audio.jpg)
 
 ## Run locally
 
@@ -36,7 +36,9 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | Q / E | Toggle left / right indicator; selecting the other side replaces it |
 | X | Toggle hazard lights |
 | H | Toggle headlights |
-| Space (hold) | Horn control with visible feedback; audio is planned for Phase 11 |
+| Space (hold) | Horn control with visible feedback and sound after audio activation |
+| Enable sound / Sound on / Sound muted button | Activate browser audio, then toggle mute; activation requires a click/tap each page load |
+| Sound settings button | Pause driving to adjust overall, vehicle, effects, and environment volume, or mute all sound |
 | R / Reset button | Return to the starting position in Park |
 | Keyboard bindings button | Remap controls, or restore defaults |
 | J / L (hold) | Check left / right shoulder; release to face forward |
@@ -111,7 +113,7 @@ The **T** area is east of the parking lot, connected through its southeast side.
 
 Rapier was selected for its [raycast vehicle controller](https://rapier.rs/javascript3d/classes/DynamicRayCastVehicleController.html) and [continuous collision detection](https://rapier.rs/docs/user_guides/javascript/rigid_body_ccd/), avoiding a custom 3D contact solver. The current implementation is still a simplified sedan: wheel contacts are rays rather than deformable tire shapes; all four contacts share drive force; there is no detailed tire model, suspension linkage geometry, crash deformation, or validated real-car calibration. Very sharp edges and extreme maneuvers may produce simplified responses. Use Reset if the car becomes stuck or overturned.
 
-The test suite checks flat-ground settling, performance targets, held steering and reverse transitions, the drive-in route, ramp ascent/descent, braking on a slope, asymmetric curb traversal, airborne contact loss and landing, glancing impacts, high-speed wall collision, repeated recovery, and deterministic frame-rate behavior. Phase 2's planar model remains only as an isolated controls/drivetrain reference; the browser uses the Rapier model. Vehicle traffic, pedestrians, and cyclists are described below; objectives, audio, and detailed vehicle art remain future work.
+The test suite checks flat-ground settling, performance targets, held steering and reverse transitions, the drive-in route, ramp ascent/descent, braking on a slope, asymmetric curb traversal, airborne contact loss and landing, glancing impacts, high-speed wall collision, repeated recovery, and deterministic frame-rate behavior. Phase 2's planar model remains only as an isolated controls/drivetrain reference; the browser uses the Rapier model. Vehicle traffic, pedestrians, cyclists, and audio are described below; objectives and detailed vehicle art remain future work.
 
 ## Phase 4 — Car damage and repair
 
@@ -132,7 +134,7 @@ This is a game damage model, not crash deformation or a real vehicle safety/cali
 - Explicit P/R/N/D selection retains automatic forward shifting. The accelerator follows the selected gear; the service brake never selects reverse. Brake overlap, unsafe moving selections, Neutral coasting, and the engagement delay have repeatable tests.
 - Park and the toggled parking brake use simplified wheel braking on all four wheels. The parking brake cuts propulsion immediately and remains effective with handling damage. Both hold the existing 1:10 test slope within 15 cm over eight seconds. This increment does not model a transmission pawl or a rear-axle handbrake/drifting system.
 - Left/right indicators and hazards blink on a one-second simulation-time cycle (half on, half off), visible on placeholder front/rear lamps and dashboard arrows. Indicators cancel when toggled again or replaced by the other side; automatic cancellation is deferred. Headlights switch emissive lenses and two forward spotlight beams; Phase 10 adds dusk and night lighting with shadowed beams.
-- The horn has a momentary held state and visible dashboard feedback. Sound is deferred to the planned driving audio phase, alongside indicator clicks and other driving sounds.
+- The horn has a momentary held state and visible dashboard feedback. Phase 11 adds a held two-tone horn and indicator clicks after audio activation.
 - Keyboard and pointer sources are tracked independently. Key repeat cannot repeatedly toggle a switch; opposing steering cancels. Blur, visibility, settings, form focus, pointer cancellation, and lost capture clear the appropriate held controls. Switches persist across ordinary interruptions. No gamepad polling is introduced until analog controller support is requested.
 - The keyboard dialog lists all bindings, pauses the simulation, rejects conflicts and reserved keys, persists versioned preferences locally, and restores defaults. Reset clears operating controls; repair preserves them.
 
@@ -264,7 +266,22 @@ Rain samples with the same scene/settings, after compilation and resize settle:
 
 These are development-host samples, not GPU completion timings or a supported-device frame-rate guarantee; shader compilation, resize, and mode changes can cause slower frames. To reproduce local measurements, open the Vite URL with **`?profile=1`** and read the browser console after 300 uninterrupted frames. Profiling runs only in development, resets its sample on pauses or condition/settings changes, and sends no telemetry. A hardware/device target and broader sustained driving/GPU profiling remain to be agreed.
 
-The basic lighting and rain increments are implemented. Broader sustained driving/GPU/device validation remains pending; the pedestrian and cyclist increments of Phase 9 are implemented, and audio remains Phase 11.
+The basic lighting and rain increments are implemented. Broader sustained driving/GPU/device validation remains pending; the pedestrian and cyclist increments of Phase 9 and the first audio increment of Phase 11 are implemented.
+
+## Phase 11 — Driving audio (first playable increment)
+
+- Click/tap **Enable sound** in the driver panel to create/resume the browser's AudioContext. There is no autoplay, external sound download, or new dependency. The same button then toggles mute; **Resume sound** or **Sound unavailable · retry** offers another activation attempt when necessary. Unsupported audio leaves free driving available. Reload requires activation again, while volume/mute preferences persist with validated fallbacks for unavailable or corrupt storage.
+- The procedural engine's firing tone and harmonic follow the sedan's actual RPM and throttle. Automatic shifts reduce engine load during the existing power interruption and add a quiet transmission cue. A speed-dependent whine distinguishes forward and reverse; Neutral removes that whine. These are placeholder timbres rather than recordings of a particular engine.
+- Tire rolling noise follows speed and grounded wheel count; the paved fraction uses the same wheel-contact positions and road lookup as grip. Rain adds a brighter wet-road hiss, while grass uses a lower rough rumble. Measured lateral body motion and lateral acceleration near the authored grip limit add bounded tire scrub. Airborne/stopped wheels do not roll or skid audibly. This is a simplified slip estimate, not a detailed tire/acoustic model.
+- The horn plays only while held. Indicators/hazards click once at each lit/dark edge on simulation time. Quiet wind and rain follow speed/weather. Up to six nearest non-parked traffic sedans within 55 m contribute spatial engine tones from their physical positions; remote collision events are culled before allocating voices.
+- Player and traffic impact/scrape events are consumed once on simulation ticks alongside existing notices. Stronger impacts increase level and decay duration; metal/vehicles/bicycles, masonry/concrete, wood, and soft surfaces use distinct placeholder brightness. Existing damage contact latches suppress resting impacts. Scrapes use stable obstacle IDs, update rather than retrigger, end independently, and have a 0.7-second missing-event timeout. Removal releases traffic scrape voices; Repair clears player scrapes, while Reset/Test area/scenarios clear all audio history.
+- World sounds use distance attenuation and stereo positioning; the listener follows the actual driver's camera position/orientation, including head checks and comfort settings. Interior engine, transmission, horn, indicators, and road noise stay centered. Sound settings separately control **Overall**, **Engine, transmission & tires**, **Horn, indicators & collisions**, and **Nearby traffic, wind & rain**, with zero-volume and mute support. The dialog is keyboard accessible, scrolls on small screens, and pauses driving.
+- Blur, hidden-page transitions, settings, and graphics interruption disconnect/stop all active loops and impact tails, clear pending cues/scrapes, and suspend audio. Returning rebuilds sound from fresh released-input simulation state, without replaying paused impacts. Late activation promises cannot make a paused/muted mixer audible. Page exit disposes sources, mixer nodes, and the context.
+- Gains/frequencies transition smoothly. A shared two-second noise buffer has a softened periodic seam; sources are not restarted every frame. The budget is **19 loop voices including fading voices**, **8 simultaneous one-shots**, and **24 pending cues**. Traffic/scrape pools and retired sources remain bounded under churn. A compressor and final smooth saturator keep output below 0.9 full scale even with all sliders at maximum.
+
+Acceptance checks cover saved settings, engine/load/shifts, forward/reverse/Neutral, dry/wet/grass/airborne sounds, held horn, indicator edges, material/severity feedback, real damage event latches, simultaneous scrape termination, repair/pause/reset, traffic retirement/culling, resource caps, unchanged physics, and identical cue sequences at 30/60/144 Hz. `npm test` passes all 156 tests, including 12 new audio checks.
+
+For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**, then click **Run audio checks**. Six checks use the production mixer with OfflineAudioContext for output limits, light/heavy impact energy/decay, stereo positioning/distance attenuation, mute/pause silence, noise seams, and voice churn, plus a live AudioContext activation/mute/pause/resume/disposal race check. On the development browser the full Busy/rain/horn/heavy-impact mix peaked at **0.559**, light/heavy impact RMS was approximately **0.0001 / 0.0026**, and churn stayed within **27 voices**. These measure digital output and lifecycle behavior; subjective sound tuning, speakers/headphones, and broader browser/device validation remain future work. There are no AI horns, music, speech, obstruction/occlusion acoustics, or Doppler effects in this increment.
 
 ## Structure
 
@@ -276,8 +293,10 @@ The basic lighting and rain increments are implemented. Broader sustained drivin
 - `src/windshield-rain.ts`: Deterministic water accumulation, swept-sector clearing, and world-space streak positions.
 - `src/weather-visuals.ts`: Bounded rain streaks, forward glass texture, and blade meshes.
 - `src/render-profile.ts`: Opt-in local development frame-rate and CPU measurements.
+- `src/driving-audio.ts`: Validated sound preferences, fixed-step loop/cue state, material feedback, and bounded traffic/scrape pools.
+- `src/audio-output.ts`: Procedural Web Audio mixer, camera listener, smooth gains, output ceiling, and browser activation/pause/disposal lifecycle.
 - `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
-- `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and future audio events.
+- `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and identified impact/scrape audio events.
 - `src/damage-visuals.ts`: Independent placeholder body panels, dents/scratches, and restoration of original geometry and paint.
 - `src/vehicle-config.ts`: Sedan dimensions, mass, engine torque curve, transmission ratios, and suspension/handling tuning.
 - `src/simulation-clock.ts`: Fixed-step accumulator shared by the browser and frame-rate regression checks.
@@ -304,6 +323,8 @@ The basic lighting and rain increments are implemented. Broader sustained drivin
 - `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
 - `tests/driving-conditions.test.mjs`: Lighting preferences, baseline restoration, headlight coverage and mirror visibility, resource limits, traffic lamps, and unchanged dry-road stops across frame rates.
 - `tests/weather.test.mjs`: Condition migration, rain fog/restoration, windshield clearing and budgets, wet stops/force limits, grass preservation, and physical wet traffic/crossing regressions.
+- `tests/driving-audio.test.mjs`: Driving sounds, saved settings, real damage event lifecycles, voice budgets, physics preservation, and fixed-step cue consistency.
+- `tests/audio-browser.html`, `tests/audio-browser.mjs`: Manually triggered real-time activation and offline browser DSP/rendered-output checks.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
@@ -430,7 +451,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Changes in visibility and stopping distance are consistent and measurable. Lighting, mirrors, and weather effects remain usable at the target frame rate. Implemented comparisons and local browser profiling are described above: 12.32 m dry versus 19.08 m wet stopping, fixed-step windshield effects/wipers, and sustained physical wet traffic checks. A supported-device frame-rate target and broader driving/GPU/device validation remain pending.
 
-### Phase 11 — Driving audio
+### Phase 11 — Driving audio (first playable increment implemented)
 
 **Focus:** Provide sound that communicates the vehicle's behavior and surroundings.
 
@@ -438,7 +459,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Connect sounds to simulation state and the damage phase's impact and scrape events, scaling collision sounds by severity and material without retriggering them continuously during resting contact. Use appropriate spatial positioning and volume controls.
 - Handle browser audio activation, muting, and pause/resume behavior.
 
-**Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds.
+**Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
 ### Phase 12 — World expansion and visual detail
 
