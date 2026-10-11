@@ -3,7 +3,7 @@ import { CAR } from './vehicle-config.ts';
 import { ROAD_HEIGHT } from './world-layout.ts';
 import type { TrafficCar } from './vehicle-traffic.ts';
 import { createDamageVisuals } from './damage-visuals.ts';
-import type { TimeOfDay } from './driving-conditions.ts';
+import type { TimeOfDay, Weather } from './driving-conditions.ts';
 
 /** Shared geometry/materials and a bounded pool, also visible in the existing mirror passes. */
 export function createTrafficVisuals(scene: THREE.Scene) {
@@ -39,14 +39,15 @@ export function createTrafficVisuals(scene: THREE.Scene) {
     scene.add(group); const result = { group, brakes, headlights, signals, damage }; groups.push(result); return result;
   }
   return {
-    update(cars: readonly TrafficCar[], seconds: number, timeOfDay: TimeOfDay = 'day') {
+    update(cars: readonly TrafficCar[], seconds: number, timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry') {
       for (const entry of groups) entry.group.visible = false;
       cars.forEach((car, i) => {
         const entry = groups[i] ?? create(); entry.group.visible = true;
         entry.group.position.set(car.x, ROAD_HEIGHT, car.z); entry.group.rotation.y = car.heading;
         entry.damage.update(car.damage);
-        for (const headlight of entry.headlights) headlight.material = timeOfDay === 'day' ? headOff : headOn;
-        for (const brake of entry.brakes) brake.material = car.braking ? brakeOn : timeOfDay === 'day' ? brakeOff : tailOn;
+        const lights = timeOfDay !== 'day' || weather === 'rain';
+        for (const headlight of entry.headlights) headlight.material = lights ? headOn : headOff;
+        for (const brake of entry.brakes) brake.material = car.braking ? brakeOn : lights ? tailOn : brakeOff;
         for (const signal of entry.signals) signal.visible = seconds % 1 < 0.5 && (car.indicator === 'left' ? signal.position.x < 0 : car.indicator === 'right' && signal.position.x > 0);
       });
     },

@@ -5,6 +5,7 @@ import { FIXED_STEP } from './simulation-clock.ts';
 import { type TrafficCar, type VehicleTraffic } from './vehicle-traffic.ts';
 import type { DamageEvent } from './vehicle-damage.ts';
 import type { VehiclePhysics } from './vehicle-physics.ts';
+import { pavedGrip } from './driving-conditions.ts';
 
 export const TRAFFIC_COLLISIONS = { reactionSeconds: 0.8, recoverySeconds: 20, maxAcceleration: 4.5, maxYawAcceleration: 2 } as const;
 interface TrafficBody { body: RAPIER.RigidBody; car: TrafficCar; recoveryTime: number; lastHeading: number }
@@ -66,7 +67,7 @@ export class TrafficPhysics {
       const desired = { x: -Math.sin(car.heading) * speed + dx * 2, z: -Math.cos(car.heading) * speed + dz * 2 };
       let ax = (desired.x - velocity.x) * 6 + velocity.x * 0.12;
       let az = (desired.z - velocity.z) * 6 + velocity.z * 0.12;
-      const magnitude = Math.hypot(ax, az), limit = TRAFFIC_COLLISIONS.maxAcceleration;
+      const magnitude = Math.hypot(ax, az), limit = TRAFFIC_COLLISIONS.maxAcceleration * pavedGrip(this.physics.weather);
       if (magnitude > limit) { ax *= limit / magnitude; az *= limit / magnitude; }
       body.addForce({ x: ax * CAR.mass, y: 0, z: az * CAR.mass }, true);
       const yawRate = clamp(angle(car.heading - entry.lastHeading) / dt, 1);

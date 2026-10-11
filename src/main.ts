@@ -13,7 +13,8 @@ import { ROAD_RULES, ROAD_EXAMPLES, APPROACHES, speedZoneAt } from './traffic-la
 import { SimulationClock } from './simulation-clock.ts';
 import { DAMAGE_PANELS } from './vehicle-damage.ts';
 import { DEFAULT_VIEW, HeadLook, loadView, serializeView, type ViewSettings } from './cockpit.ts';
-import { loadConditions, serializeConditions, lightingGuidance, type DrivingConditions } from './driving-conditions.ts';
+import { loadConditions, serializeConditions, lightingGuidance, WIPERS, type DrivingConditions } from './driving-conditions.ts';
+import { WindshieldRain } from './windshield-rain.ts';
 import { RenderProfile } from './render-profile.ts';
 import { HOUSES, isOnRoad, PARKING_LOT, PARKING_MARKINGS, PAVED_SURFACES, TEST_AREA, TEST_CURB, TEST_RAMP, TREES, WORLD_BOUNDS } from './world-layout.ts';
 
@@ -34,6 +35,7 @@ let physics: VehiclePhysics | undefined;
 const clock = new SimulationClock();
 const trafficSignals = new TrafficSignals();
 const traffic = new VehicleTraffic();
+const windshield = new WindshieldRain();
 let trafficPhysics: TrafficPhysics | undefined;
 let pedestrians: Pedestrians | undefined;
 const pedestriansEnabled = document.querySelector<HTMLInputElement>('#pedestrians-enabled')!;
@@ -49,7 +51,12 @@ const conditionsStorageKey = 'drivers-ed.conditions.v1';
 let conditions: DrivingConditions = loadConditions(null);
 try { conditions = loadConditions(localStorage.getItem(conditionsStorageKey)); } catch { /* Daytime works without storage. */ }
 const lightingSelect = document.querySelector<HTMLSelectElement>('#conditions-timeOfDay')!;
+const weatherSelect = document.querySelector<HTMLSelectElement>('#conditions-weather')!;
+const wiperSelect = document.querySelector<HTMLSelectElement>('#conditions-wipers')!;
+const wiperButton = document.querySelector<HTMLButtonElement>('#wipers')!;
 lightingSelect.value = conditions.timeOfDay;
+weatherSelect.value = conditions.weather;
+wiperSelect.value = conditions.wipers;
 document.querySelector<HTMLElement>('#app')!.dataset.lighting = conditions.timeOfDay;
 const bindingStorageKey = 'drivers-ed.bindings.v1';
 try { driverInput.load(localStorage.getItem(bindingStorageKey)); } catch { /* Storage may be unavailable. */ }
@@ -86,6 +93,7 @@ function reset(spawn?: Spawn) {
   trafficPhysics?.clear();
   pedestrians?.clear();
   physics.reset(spawn);
+  windshield.reset();
   trafficSignals.reset();
   if (trafficDensity.value === 'scenario') { traffic.density = 'light'; trafficDensity.value = 'light'; }
   traffic.reset(car);
@@ -137,16 +145,25 @@ function renderViewSettings() {
 renderViewSettings();
 function saveConditions() {
   lightingSelect.value = conditions.timeOfDay;
+  weatherSelect.value = conditions.weather;
+  wiperSelect.value = conditions.wipers;
+  if (physics) physics.weather = conditions.weather;
+  traffic.weather = conditions.weather;
   document.querySelector<HTMLElement>('#app')!.dataset.lighting = conditions.timeOfDay;
   const message = document.querySelector('#conditions-message')!;
   try {
     localStorage.setItem(conditionsStorageKey, serializeConditions(conditions));
-    message.textContent = 'Lighting saved. Return to driving to see this condition.';
-  } catch { message.textContent = 'Lighting applies for this session; browser storage is unavailable.'; }
+    message.textContent = 'Driving conditions saved.';
+  } catch { message.textContent = 'Conditions apply for this session; browser storage is unavailable.'; }
 }
-lightingSelect.addEventListener('change', () => {
-  conditions = loadConditions(serializeConditions({ timeOfDay: lightingSelect.value as DrivingConditions['timeOfDay'] }));
+for (const select of [lightingSelect, weatherSelect, wiperSelect]) select.addEventListener('change', () => {
+  conditions = loadConditions(serializeConditions({ timeOfDay: lightingSelect.value as DrivingConditions['timeOfDay'], weather: weatherSelect.value as DrivingConditions['weather'], wipers: wiperSelect.value as DrivingConditions['wipers'] }));
   saveConditions();
+});
+wiperButton.addEventListener('click', () => {
+  conditions.wipers = WIPERS[(WIPERS.indexOf(conditions.wipers) + 1) % WIPERS.length]!;
+  saveConditions();
+  canvas.focus({ preventScroll: true });
 });
 function saveView() {
   try { localStorage.setItem(viewStorageKey, serializeView(view)); viewMessage.textContent = 'View preferences saved.'; }
@@ -349,8 +366,11 @@ function updateControlDisplay() {
   if (hornState.textContent !== hornText) hornState.textContent = hornText;
   document.querySelector('#switch-state')!.textContent = `${car.parkingBrake ? 'Parking brake ON' : 'Parking brake OFF'} · Lights ${car.headlights ? 'ON' : 'OFF'}`;
   const conditionStatus = document.querySelector('#conditions-status')!;
-  const guidance = lightingGuidance(conditions.timeOfDay, car.headlights);
+  const guidance = lightingGuidance(conditions.timeOfDay, car.headlights, conditions.weather);
   if (conditionStatus.textContent !== guidance) conditionStatus.textContent = guidance;
+  const wiperText = conditions.weather === 'dry' ? 'Wipers parked' : `Wipers: ${conditions.wipers}`;
+  if (wiperButton.textContent !== wiperText) wiperButton.textContent = wiperText;
+  wiperButton.disabled = conditions.weather === 'dry';
   const look = driverInput.lookSnapshot();
   for (const button of document.querySelectorAll<HTMLElement>('.look-controls [data-drive]')) {
     const active = button.dataset.drive === 'lookLeft' ? look.left : button.dataset.drive === 'lookRight' ? look.right : look.back;
@@ -423,7 +443,8 @@ function showError(message: string) {
 async function start() {
   const scene = createScene(canvas);
   showNotice('Preparing the vehicle…');
-  physics = await createVehiclePhysics({ explicitControls: true });
+  physics = await createVehiclePhysics({ explicitControls: true, weather: conditions.weather });
+  traffic.weather = conditions.weather;
   physics.damage.handlingEnabled = damageHandling.checked;
   car = physics.state;
   trafficPhysics = new TrafficPhysics(physics);
@@ -455,6 +476,7 @@ async function start() {
     const input = driverInput.snapshot();
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
     clock.advance(dt, step => {
+      windshield.step(step, conditions.weather, conditions.wipers);
       pedestrians!.beforeStep(trafficSignals.seconds, [...traffic.cars, car], step);
       traffic.step(trafficSignals.seconds, car, pedestrians!.hazards(trafficSignals.seconds), pedestrians!.obstacles());
       trafficPhysics!.sync(traffic.cars);
@@ -503,9 +525,9 @@ async function start() {
     const zone = isOnRoad(car.x, car.z) ? speedZoneAt(car) : undefined;
     roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
     roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
-    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay);
+    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay, conditions.weather, windshield);
     drawMap();
-    profile?.record(`${conditions.timeOfDay}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}`, intervalMs, performance.now() - frameStart);
+    profile?.record(`${conditions.timeOfDay}, ${conditions.weather}, wipers ${conditions.wipers}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}`, intervalMs, performance.now() - frameStart);
   }
   requestAnimationFrame(frame);
 }

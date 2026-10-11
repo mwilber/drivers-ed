@@ -77,7 +77,7 @@
           <button type="button" data-drive="horn" aria-label="Horn, hold to activate">Hold horn</button>
         </div>
         <p id="switch-state">Parking brake OFF · Lights OFF</p>
-        <p id="conditions-status" role="status">Day · dry roads</p>
+        <div class="weather-controls"><p id="conditions-status" role="status">Day · dry roads</p><button id="wipers" type="button" aria-label="Cycle windshield wipers (Off, Slow, Fast)" disabled>Wipers parked</button></div>
         <div class="signal-state" aria-label="Indicator lamps"><span id="indicator-left" aria-label="Left indicator lamp">◀</span><span id="horn-state" role="status">Horn ready · sound in phase 11</span><span id="indicator-right" aria-label="Right indicator lamp">▶</span></div>
         <button id="settings" type="button">Keyboard bindings</button>
       </aside>
@@ -92,9 +92,13 @@
         <h2 id="view-title">View &amp; lighting</h2>
         <p>Adjust your sightline. Hold the shoulder or back controls to look around; release to face forward. Driving pauses while settings are open.</p>
         <label for="conditions-timeOfDay">Lighting</label>
-        <select id="conditions-timeOfDay"><option value="day">Day · dry baseline</option><option value="dusk">Dusk · dry roads</option><option value="night">Night · dry roads</option></select>
-        <p class="setting-hint">Switch on the headlights with the Headlights button or your assigned key after returning to driving. Reset keeps the lighting choice and switches the headlights off. Grip stays dry in all three presets.</p>
-        <p id="conditions-message" role="status">Lighting preferences save on this device when browser storage is available.</p>
+        <select id="conditions-timeOfDay"><option value="day">Day</option><option value="dusk">Dusk</option><option value="night">Night</option></select>
+        <label for="conditions-weather">Weather / surface</label>
+        <select id="conditions-weather"><option value="dry">Dry · original grip and visibility</option><option value="rain">Rain · wet roads and reduced visibility</option></select>
+        <label for="conditions-wipers">Windshield wipers</label>
+        <select id="conditions-wipers"><option value="off">Off</option><option value="slow">Slow</option><option value="fast">Fast</option></select>
+        <p class="setting-hint">Rain lengthens stopping distances. Wipers clear the forward windshield; use the Wipers button while driving to change speed. They park when the weather is dry. Switch on headlights in rain or low light. Reset keeps these preferences and switches headlights off.</p>
+        <p id="conditions-message" role="status">Driving conditions save on this device when browser storage is available.</p>
         <label for="view-fov">Field of view <output id="value-fov" for="view-fov"></output></label>
         <input id="view-fov" type="range" min="55" max="90" step="1" />
         <label for="view-eyeHeight">Eye height <output id="value-eyeHeight" for="view-eyeHeight"></output></label>

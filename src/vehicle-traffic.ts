@@ -5,6 +5,7 @@ import { FIXED_STEP } from './simulation-clock.ts';
 import { CAR } from './vehicle-config.ts';
 import { VehicleDamage } from './vehicle-damage.ts';
 import type { CrossingHazard } from './pedestrians.ts';
+import { pavedGrip, RAIN, type Weather } from './driving-conditions.ts';
 
 export const TRAFFIC_DENSITIES = { off: 0, single: 1, light: 6, busy: 16 } as const;
 export type TrafficDensity = keyof typeof TRAFFIC_DENSITIES;
@@ -52,12 +53,15 @@ export function trafficRoute(laneId: string, seed = 0, count = 12): string[] {
 export class VehicleTraffic {
   readonly cars: TrafficCar[] = [];
   density: TrafficDensity = 'light';
+  weather: Weather = 'dry';
   completed = 0;
   private ticks = 0;
   private nextId = 0;
   private spawnCursor = 0;
   private reservations = new Map<string, number>();
   get seconds(): number { return this.ticks * FIXED_STEP; }
+  private get braking(): number { return TRAFFIC_TUNING.braking * pavedGrip(this.weather); }
+  private get headway(): number { return TRAFFIC_TUNING.headway * (this.weather === 'rain' ? RAIN.trafficHeadway : 1); }
 
   add(route: string[], progress = 0, speed = 0): TrafficCar {
     if (!route.length || route.some(id => !lanes.has(id))) throw new Error('Invalid traffic route');
@@ -186,10 +190,16 @@ export class VehicleTraffic {
   }
   /** Distance to an actor's footprint along the upcoming path, including a turn and exit lane. */
   private obstacleDistance(car: TrafficCar, actors: readonly TrafficActor[], crossings: readonly CrossingHazard[] = []): number {
+    // A late request from the curb must not trap a wet, slower-to-stop car in
+    // the same exclusion area that prevents the pedestrian from stepping out.
+    // Let it finish clearing that area. Entered pedestrians always retain priority.
+    const crossingRequests = crossings.filter(hazard => !(this.weather === 'rain' && hazard.entered === false
+      && Math.abs(car.x - hazard.crossing.x) < hazard.crossing.width / 2 + CAR.length / 2
+      && Math.abs(car.z - hazard.crossing.z) < hazard.crossing.depth / 2 + CAR.length / 2));
     const lane = lanes.get(car.laneId)!, c = car.connectionId ? connections.get(car.connectionId)! : this.nextConnection(car);
-    const horizon = Math.max(15, car.speed ** 2 / (2 * TRAFFIC_TUNING.braking) + car.speed * TRAFFIC_TUNING.headway + 10);
+    const horizon = Math.max(15, car.speed ** 2 / (2 * this.braking) + car.speed * this.headway + 10);
     const nearby = actors.filter(actor => distance(car, actor) <= horizon + CAR.length);
-    if (!nearby.length && !crossings.length) return Infinity;
+    if (!nearby.length && !crossingRequests.length) return Infinity;
     let nearest = Infinity;
     for (let d = 0; d <= horizon; d += 1) {
       const progress = car.progress + d;
@@ -202,7 +212,7 @@ export class VehicleTraffic {
         const p = onConnection && c ? cp - lengths.get(c.id)! : progress;
         pose = { x: target.start.x + target.direction.x * p, z: target.start.z + target.direction.z * p, heading: Math.atan2(-target.direction.x, -target.direction.z), speed: 0 };
       }
-      for (const { crossing } of crossings) {
+      for (const { crossing } of crossingRequests) {
         // Scan the full upcoming path, including a turn and its outgoing crossing.
         const halfX = Math.abs(Math.sin(pose.heading)) * CAR.length / 2 + Math.abs(Math.cos(pose.heading)) * CAR.width / 2;
         const halfZ = Math.abs(Math.cos(pose.heading)) * CAR.length / 2 + Math.abs(Math.sin(pose.heading)) * CAR.width / 2;
@@ -234,6 +244,7 @@ export class VehicleTraffic {
       if (car.stunnedFor > 0) { car.driveSpeed = 0; car.braking = true; car.reason = 'Collision recovery'; continue; }
       const lane = lanes.get(car.laneId)!, c = this.nextConnection(car);
       let target = Math.min(9, (speedZoneAt(car)?.mph ?? 25) * 0.44704);
+      if (this.weather === 'rain') target *= RAIN.trafficSpeed;
       if (car.recovering) target = Math.min(target, 2);
       let available = Infinity;
       car.reason = 'Cruising';
@@ -245,22 +256,27 @@ export class VehicleTraffic {
           if (remaining < (car.physical ? 1.5 : 0.15) && Math.abs(car.speed) < 0.05 && this.permitted(car, c, signalSeconds, player)) this.reservations.set(lane.to, car.id);
           else available = Math.max(0, remaining);
         } else if (!c) available = Math.max(0, laneLength(lane) - car.progress);
-        if (remaining < 25 && c?.turn !== 'straight') target = Math.min(target, TRAFFIC_TUNING.turnSpeed);
-      } else target = Math.min(target, TRAFFIC_TUNING.turnSpeed);
+        if (remaining < 25 && c?.turn !== 'straight') target = Math.min(target, TRAFFIC_TUNING.turnSpeed * (this.weather === 'rain' ? RAIN.trafficSpeed : 1));
+      } else target = Math.min(target, TRAFFIC_TUNING.turnSpeed * (this.weather === 'rain' ? RAIN.trafficSpeed : 1));
       const obstacle = this.obstacleDistance(car, [...actors.filter(a => a.id !== car.id), ...(player ? [player] : []), ...pedestrians], crossings);
       if (obstacle < available) { available = Math.max(0, obstacle - TRAFFIC_TUNING.gap); car.reason = crossings.length ? 'Yielding / obstruction' : 'Following / obstruction'; }
       // Dynamic motors need stopping room for their response lag; never erase velocity to meet a stop target.
-      const brakeMargin = car.physical ? 0.4 + Math.max(0, car.speed) * 0.35 : 0.04;
-      target = Math.min(target, Math.sqrt(2 * TRAFFIC_TUNING.braking * Math.max(0, available - brakeMargin)));
-      if (Number.isFinite(obstacle)) target = Math.min(target, Math.max(0, (obstacle - TRAFFIC_TUNING.gap) / TRAFFIC_TUNING.headway));
+      // Wet motors have a lower combined force budget. Leave extra clearance
+      // for physical lag around turns, so a stopped bumper cannot block the
+      // pedestrian whose crossing request it is waiting to serve.
+      const brakeMargin = car.physical ? this.weather === 'rain' ? 1.25 + Math.max(0, car.speed) * 0.55 : 0.4 + Math.max(0, car.speed) * 0.35 : 0.04;
+      target = Math.min(target, Math.sqrt(2 * this.braking * Math.max(0, available - brakeMargin)));
+      if (Number.isFinite(obstacle)) target = Math.min(target, Math.max(0, (obstacle - TRAFFIC_TUNING.gap) / this.headway));
       const previous = car.physical ? car.driveSpeed : car.speed;
-      car.speed = Math.max(0, previous + Math.max(-TRAFFIC_TUNING.braking * FIXED_STEP, Math.min(TRAFFIC_TUNING.acceleration * car.damage.effects.power * FIXED_STEP, target - previous)));
+      car.speed = Math.max(0, previous + Math.max(-this.braking * FIXED_STEP, Math.min(TRAFFIC_TUNING.acceleration * pavedGrip(this.weather) * car.damage.effects.power * FIXED_STEP, target - previous)));
       let movement = Math.min(available, (previous + car.speed) / 2 * FIXED_STEP);
       if (available <= 0.05) { car.speed = 0; movement = 0; }
       car.driveSpeed = car.speed;
       car.braking = car.speed < previous || car.speed < 0.05;
       car.progress += movement; car.distanceTravelled += movement;
-      if (!car.connectionId && !c && laneLength(lane) - car.progress <= (car.physical ? 0.6 : 0.05) && Math.abs(car.speed) < 0.1) { finished.push(car); continue; }
+      // The wet motor parks farther behind a finite route's end. Use the same
+      // arrival window as junction admission so it can finish rather than queue forever.
+      if (!car.connectionId && !c && laneLength(lane) - car.progress <= (car.physical ? this.weather === 'rain' ? 1.5 : 0.6 : 0.05) && Math.abs(car.speed) < 0.1) { finished.push(car); continue; }
       if (!car.connectionId && car.progress >= laneLength(lane)) {
         if (!c) { finished.push(car); continue; }
         car.progress -= laneLength(lane); car.connectionId = c.id;

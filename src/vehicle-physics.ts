@@ -5,10 +5,11 @@ import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, isOnRoad, PAVED_SURFACES, rampVe
 import { ROAD_POSTS } from './traffic-layout.ts';
 import { FIXED_STEP } from './simulation-clock.ts';
 import { VehicleDamage, type DamageContact } from './vehicle-damage.ts';
+import { pavedGrip, type Weather } from './driving-conditions.ts';
 
 export interface PhysicsBox { x: number; y: number; z: number; width: number; height: number; depth: number }
 export interface Spawn { x: number; z: number; heading: number }
-export interface PhysicsOptions { environment?: 'neighborhood' | 'flat'; spawn?: Spawn; boxes?: readonly PhysicsBox[]; damageHandling?: boolean; explicitControls?: boolean }
+export interface PhysicsOptions { environment?: 'neighborhood' | 'flat'; spawn?: Spawn; boxes?: readonly PhysicsBox[]; damageHandling?: boolean; explicitControls?: boolean; weather?: Weather }
 export interface WheelPose { x: number; y: number; z: number; steering: number; rotation: number; contact: boolean; suspensionLength: number }
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
@@ -42,9 +43,11 @@ export class VehiclePhysics {
   rotation = { ...identity };
   up = { x: 0, y: 1, z: 0 };
   contacts = 0;
+  weather: Weather;
 
   constructor(options: PhysicsOptions) {
     this.options = options;
+    this.weather = options.weather ?? 'dry';
     this.damage.handlingEnabled = options.damageHandling ?? true;
     this.world = new RAPIER.World({ x: 0, y: -HANDLING.gravity, z: 0 });
     this.world.timestep = FIXED_STEP;
@@ -156,16 +159,20 @@ export class VehiclePhysics {
     for (let i = 0; i < 4; i++) {
       const contact = this.vehicle.wheelContactPoint(i);
       const paved = this.options.environment === 'flat' || (contact ? isOnRoad(contact.x, contact.z) : onRoad);
-      this.vehicle.setWheelFrictionSlip(i, SUSPENSION.tireFriction * (paved ? 1 : HANDLING.grassGrip / HANDLING.dryGrip));
+      const grip = paved ? pavedGrip(this.weather) : HANDLING.grassGrip / HANDLING.dryGrip;
+      this.vehicle.setWheelFrictionSlip(i, SUSPENSION.tireFriction * grip);
       this.vehicle.setWheelSteering(i, i < 2 ? this.state.steering + effects.steeringBias : 0);
       this.vehicle.setWheelSuspensionStiffness(i, SUSPENSION.stiffness * effects.suspension[i]!);
       this.vehicle.setWheelSuspensionCompression(i, SUSPENSION.compression * effects.suspension[i]!);
       this.vehicle.setWheelSuspensionRelaxation(i, SUSPENSION.relaxation * effects.suspension[i]!);
       // Rapier's wheel forward axis is +Z; the sedan faces local -Z.
-      this.vehicle.setWheelEngineForce(i, -engineForce);
+      // Preserve dry tuning exactly. Wet pavement has a bounded per-wheel
+      // longitudinal force budget as well as Rapier's combined tire-slip limit.
+      const wetForceLimit = paved && this.weather === 'rain' ? CAR.mass * HANDLING.gravity * HANDLING.dryGrip * grip / 4 : Infinity;
+      this.vehicle.setWheelEngineForce(i, -Math.sign(engineForce) * Math.min(Math.abs(engineForce), wetForceLimit));
       // Simplified wheel brakes hold Park and the separate parking brake.
       const parkingImpulse = parkingResistance * CAR.mass * dt / 4;
-      this.vehicle.setWheelBrake(i, brakingImpulse + parkingImpulse);
+      this.vehicle.setWheelBrake(i, Math.min(brakingImpulse + parkingImpulse, wetForceLimit * dt));
     }
     this.body.wakeUp();
     this.vehicle.updateVehicle(dt, undefined, undefined, collider => collider.parent()?.handle !== this.body.handle);

@@ -12,7 +12,7 @@ export interface Pedestrian extends Point {
   id: number; crossing: Crossing; side: number; state: 'waiting' | 'crossing' | 'fallen';
   body: RAPIER.RigidBody; wait: number; fallenFor: number; speed: number;
 }
-export interface CrossingHazard { crossing: Crossing }
+export interface CrossingHazard { crossing: Crossing; entered?: boolean }
 export const crossingSpan = (crossing: Crossing): number => STREETS.find(s => s.id === crossing.streetId)!.width / 2 + 1.5;
 const across = (c: Crossing) => ({ x: -c.direction.z, z: c.direction.x });
 
@@ -88,7 +88,7 @@ export class Pedestrians {
   }
   hazards(seconds: number): CrossingHazard[] {
     return this.people.filter(p => p.state === 'crossing' || (p.state === 'waiting' && p.wait <= 0 && crossingPhase(p.crossing, seconds)))
-      .map(p => ({ crossing: p.crossing }));
+      .map(p => ({ crossing: p.crossing, entered: p.state === 'crossing' }));
   }
   obstacles(): TrafficActor[] {
     return this.people.filter(p => p.state === 'fallen').map(p => ({ x: p.x, z: p.z, heading: 0, speed: 0 }));

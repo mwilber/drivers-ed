@@ -11,7 +11,7 @@ import { IDLE, MPH } from '../scripts/handling-scenarios.mjs';
 
 const position = new THREE.Vector3(0, 0.7, 0), rotation = new THREE.Quaternion();
 test('lighting preferences round-trip and reject malformed, older, missing and unsupported conditions', () => {
-  for (const timeOfDay of TIMES_OF_DAY) assert.deepEqual(loadConditions(serializeConditions({ timeOfDay })), { timeOfDay });
+  for (const timeOfDay of TIMES_OF_DAY) assert.deepEqual(loadConditions(serializeConditions({ ...DEFAULT_CONDITIONS, timeOfDay })), { ...DEFAULT_CONDITIONS, timeOfDay });
   for (const raw of [null, 'broken', '{}', 'null', '{"version":2,"conditions":{"timeOfDay":"night"}}', '{"version":1}', ...[null, {}, 'rain', 2, false].map(timeOfDay => serializeConditions({ timeOfDay }))]) {
     assert.deepEqual(loadConditions(raw), DEFAULT_CONDITIONS);
   }

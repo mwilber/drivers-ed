@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LIGHTING, type TimeOfDay } from './driving-conditions.ts';
+import { LIGHTING, RAIN, type Weather, type TimeOfDay } from './driving-conditions.ts';
 import { CAR, SUSPENSION } from './vehicle-config.ts';
 
 /** Fixed light/shadow budget; mirror passes reuse the main pass's shadow maps. */
@@ -33,22 +33,29 @@ export function createDrivingLighting(scene: THREE.Scene) {
     rig.add(beam, beam.target);
     return beam;
   });
-  let previous: TimeOfDay | undefined;
+  let previous = '';
+  const rainColor = new THREE.Color(0x657580);
   return {
     ambient, sun, rig, beams,
-    update(timeOfDay: TimeOfDay, headlights: boolean, position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number; w: number }) {
-      if (previous !== timeOfDay) {
+    update(timeOfDay: TimeOfDay, headlights: boolean, position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number; w: number }, weather: Weather = 'dry') {
+      const key = `${timeOfDay}/${weather}`;
+      if (previous !== key) {
         const preset = LIGHTING[timeOfDay];
-        (scene.background as THREE.Color).setHex(preset.sky);
-        (scene.fog as THREE.Fog).color.setHex(preset.sky);
+        const raining = weather === 'rain';
+        const sky = scene.background as THREE.Color, fog = scene.fog as THREE.Fog;
+        sky.setHex(preset.sky);
+        if (raining) sky.lerp(rainColor, timeOfDay === 'night' ? 0.08 : 0.4);
+        fog.color.copy(sky);
+        fog.near = raining ? RAIN.fogNear : 150;
+        fog.far = raining ? RAIN.fogFar : 390;
         ambient.color.setHex(preset.skyLight);
         ambient.groundColor.setHex(preset.groundLight);
-        ambient.intensity = preset.ambient;
+        ambient.intensity = preset.ambient * (raining ? 0.8 : 1);
         sun.color.setHex(preset.sunColor);
-        sun.intensity = preset.sun;
+        sun.intensity = preset.sun * (raining ? 0.35 : 1);
         sun.position.set(-90, preset.sunHeight, 60);
-        sun.castShadow = preset.sunShadows;
-        previous = timeOfDay;
+        sun.castShadow = preset.sunShadows && !raining;
+        previous = key;
       }
       rig.position.copy(position);
       rig.quaternion.copy(rotation);

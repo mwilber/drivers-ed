@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 10's first increment adds configurable day, dusk, and night lighting, shadowed headlights, and visible traffic lamps. Crossing pedestrians, vehicle yielding, repeatable encounters, and finite-mass collisions remain available on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 10 adds configurable day, dusk, and night lighting, shadowed headlights, rain, wet-road grip, reduced visibility, and windshield wipers. Crossing pedestrians, vehicle yielding, repeatable encounters, and finite-mass collisions remain available on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed at night with headlights in Phase 10](docs/screenshots/app-phase-10.jpg)
+![Drivers Ed in rain with working windshield wipers in Phase 10](docs/screenshots/app-phase-10-rain.jpg)
 
 ## Run locally
 
@@ -42,7 +42,8 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | J / L (hold) | Check left / right shoulder; release to face forward |
 | K (hold) | Look back through the rear window; release to face forward |
 | Shoulder / Back buttons (hold) | Pointer, touch, or focused Space/Enter head checks |
-| View & lighting button | Select Day / Dusk / Night; adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
+| View & lighting button | Select Day / Dusk / Night, Dry / Rain, and Off / Slow / Fast wipers; adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
+| Wipers button | Cycle Off / Slow / Fast while driving in rain; blades park in Dry |
 | Try a road example selector | Reset in Park before signals, a stop/yield junction, or parallel parking; restart the signal cycle |
 | Traffic examples in the road example selector | Repeat following/signals, simultaneous stops, a permissive left turn, a yield encounter, or a collision with fixed traffic starts |
 | Pedestrian examples in the road example selector | Repeat crossing/yielding, partial occlusion, or failure to yield with fixed starts |
@@ -205,17 +206,31 @@ Acceptance checks cover safe gaps and signal clearance, upright repeated crossin
 
 This is a simplified single-body pedestrian model, not an articulated ragdoll or validated human biomechanics. Gap acceptance uses nearby physical poses without modeling attention, sightline perception, or future turn intent; AI yields conservatively. Cyclists, bicycles, overtaking interactions, and rider/bicycle crash behavior are the separate next increment within Phase 9.
 
-## Phase 10 — Lighting (first playable increment)
+## Phase 10 — Lighting, rain, and wet roads
 
-- **View & lighting → Lighting** selects **Day**, **Dusk**, or **Night**. Closing the dialog resumes driving in the chosen condition. The choice saves separately from cockpit preferences, with validated defaults for missing, corrupt, or unsupported data. **Restore defaults** restores daytime and the original cockpit view. Reset, Test area, and all road/traffic/pedestrian examples preserve the lighting choice; they retain the existing reset behavior of switching headlights off. The driver panel identifies the condition and reminds the driver to switch on headlights at dusk/night.
+- **View & lighting → Lighting** selects **Day**, **Dusk**, or **Night**; **Weather / surface** independently selects **Dry** or **Rain**. Closing the dialog resumes driving in the chosen condition. Conditions save separately from cockpit preferences, with validated defaults for missing, corrupt, or unsupported data. Older lighting-only preferences migrate while preserving the time of day. **Restore defaults** restores Day, Dry, Slow wipers (parked), and the original cockpit view. Reset, Test area, and all road/traffic/pedestrian examples preserve conditions; they retain the existing reset behavior of switching headlights off. The driver panel identifies the condition and reminds the driver to switch on headlights at dusk/night or in rain.
 - Day keeps the original sky, fog distances, and sun/ambient lighting. Dusk lowers the sun and ambient illumination; night uses a dim blue ambient/moonlight baseline so nearby silhouettes and mirrors remain usable. There is no automatic time progression. All three presets retain identical dry-road grip, braking, AI decisions, and pedestrian behavior.
 - The player's two headlights illuminate the road and markings, follow the complete chassis pose, and cast shadows behind obstacles. Their authored range is 70 m; cone checks cover both lane edges 10–40 m ahead. They are a simplified symmetric beam, without a real low-beam cutoff or optical calibration. Road arrows/yield triangles now respond to lighting, and sign textures use sRGB color so dark lettering remains distinguishable under headlights. The cabin roof also responds to scene lighting. Player rear lamps illuminate with headlights; service braking makes them brighter.
-- Traffic front and tail lenses illuminate automatically at dusk/night, with brighter brake lamps and existing indicators. These emissive placeholders are visible in the cockpit and mirrors; AI cars do not project additional headlight beams. The player's light rig stays outside its hidden mirror shell, preserving illumination in every mirror pass. Standard/Low/Off mirror options retain their existing update/pixel budgets.
-- Lighting has a fixed budget: one 2048 × 2048 sun shadow map during day/dusk, and at most two 512 × 512 headlight shadow maps when headlights are on. Night disables sun shadows. Mirror passes reuse main-view shadows rather than rebuilding them; condition changes reuse lights and materials. No third-party libraries were added.
+- Traffic front and tail lenses illuminate automatically at dusk/night and in rain, with brighter brake lamps and existing indicators. These emissive placeholders are visible in the cockpit and mirrors; AI cars do not project additional headlight beams. The player's light rig stays outside its hidden mirror shell, preserving illumination in every mirror pass. Standard/Low/Off mirror options retain their existing update/pixel budgets.
+- Lighting has a fixed budget: one 2048 × 2048 sun shadow map during dry day/dusk, and at most two 512 × 512 headlight shadow maps when headlights are on. Night and Rain disable sun shadows. Mirror passes reuse main-view shadows rather than rebuilding them; condition changes reuse lights and materials. No third-party libraries were added.
+- Rain lowers sun/ambient illumination, disables sun shadows under the overcast sky, darkens the shared asphalt material, and brings authored fog distances from **150–390 m** to **25–125 m**. At 80 m, linear fog removes 55% of distant contrast. Switching to Dry restores the original sky, lighting, fog, asphalt, and wheel tuning.
+- Each paved wheel receives **55% of dry tire grip**, with bounded forward/reverse drive force and braking impulse. Grass retains its existing tuning. Weather changes preserve body pose, velocity, damage, and gear; reset/repair retain the weather. These are authored teaching comparisons, not calibrated tire or weather measurements.
+- Wet traffic uses **80% cruise/turn speed**, **1.4× following headway**, reduced acceleration/braking force, and extra physical stopping clearance. It retains stops, signals, reservations, and pedestrian yielding. A car already inside a crossing's exclusion area clears a late curb request before the waiting pedestrian enters; an entered pedestrian always retains priority. Finite route completion accommodates the wet stopping margin.
+- Windshield water accumulates in a **32 × 16** grid on the forward glass. **Off** allows buildup; **Slow** sweeps every **1.6 s**, and **Fast** every **0.8 s**, clearing the sectors traversed by two visible blades. Speed changes preserve blade phase; Off finishes the cycle before parking. Dry clears the glass and parks the blades. Pause freezes accumulation/motion; reset clears water and restarts from parked blades. Head checks naturally look away from the forward glass, and mirror passes omit it with the player shell.
+- Rain has a fixed budget of **320 world-space streaks** in one line draw per rendered view, one windshield draw with a 512-byte water texture, and two shared blade meshes in the cockpit. Toggles reuse those resources; no new lights, reflections, render targets, shadow maps, or third-party libraries were added.
 
-Acceptance checks cover saved-condition validation, exact restoration of daytime lighting, forward cone coverage through chassis yaw/pitch/roll, headlight on/off, light visibility when the player's mirror shell is hidden, bounded light/shadow resources, traffic brake/tail distinction and pooled-slot reuse. A repeatable **30 mph stop remains 12.32 m** in every lighting preset, with identical vehicle state at **30/60/144 Hz**. All **119 tests** pass, including the prior 113 driving, traffic, pedestrian, and damage checks. The production build passes with the existing Rapier bundle-size advisory. Browser checks cover headlights on/off, readable lane edges/signs and rear scenery, saved lighting across reload, restore defaults, reset, mirror quality, and **390 × 844** / **844 × 390** layouts.
+Acceptance checks cover condition migration/validation, exact dry restoration, light cones and lamps, bounded resources, windshield clearing, per-wheel wet grip, forward/reverse force limits, and safe physical traffic/pedestrian behavior. All **131 tests** pass, including the prior 119 checks. Vehicle stopping and windshield state agree at **30/60/144 Hz**. A ten-minute shared-world wet Busy run completes **16 routes and 66 crossings without impacts**. The production build passes with the existing Rapier bundle-size advisory. Browser checks cover rain buildup, visible wiper clearing and speed changes, headlights, mirrors, saved conditions across reload, defaults/reset, and **390 × 844** / **844 × 390** layouts.
 
-Initial steady desktop measurements in the Codex in-app browser use 300 frames per condition, the default seat, a parked player at the neighborhood start, Busy traffic, three pedestrians, headlights on, and Standard mirrors:
+The repeatable flat-road 30 mph service-brake comparison uses the same intact sedan, gear, initial velocity, and fixed-step input:
+
+| Surface | Stopping distance | Time to stop |
+| --- | --- | --- |
+| Dry, every lighting preset | 12.32 m | 1.77 s |
+| Rain / wet pavement | 19.08 m | 2.81 s |
+
+Rain increases this stop by **55%**. Reaction distance is excluded. Wet surface response is simplified: there are no puddles, aquaplaning, tire temperature, standing-water depths, ice, or snow. Windshield droplets use a translucent procedural pattern without optical refraction, flowing rivulets, or side/rear-window water.
+
+Initial dry steady desktop measurements in the Codex in-app browser use 300 frames per condition, the default seat, a parked player at the neighborhood start, Busy traffic, three pedestrians, headlights on, and Standard mirrors:
 
 | Lighting | Observed frame rate | Mean frame CPU | p95 frame CPU |
 | --- | --- | --- | --- |
@@ -223,17 +238,27 @@ Initial steady desktop measurements in the Codex in-app browser use 300 frames p
 | Dusk | 74 FPS | 5.80 ms | 8.60 ms |
 | Night | 74 FPS | 4.64 ms | 6.80 ms |
 
+Rain samples with the same scene/settings, after compilation and resize settle:
+
+| Lighting / wipers | Observed frame rate | Mean frame CPU | p95 frame CPU |
+| --- | --- | --- | --- |
+| Day / Slow | 75 FPS | 4.95 ms | 7.60 ms |
+| Dusk / Fast | 75 FPS | 4.69 ms | 7.20 ms |
+| Night / Fast | 75 FPS | 5.00 ms | 8.10 ms |
+
 These are development-host samples, not GPU completion timings or a supported-device frame-rate guarantee; shader compilation, resize, and mode changes can cause slower frames. To reproduce local measurements, open the Vite URL with **`?profile=1`** and read the browser console after 300 uninterrupted frames. Profiling runs only in development, resets its sample on pauses or condition/settings changes, and sends no telemetry. A hardware/device target and broader sustained driving/GPU profiling remain to be agreed.
 
-This increment follows the roadmap's dusk/night-first sequence. Rain, wet-road grip, reduced weather visibility, windshield rain, and wipers remain the next Phase 10 increment. Cyclists remain deferred within Phase 9; audio remains Phase 11.
+The basic lighting and rain increments are implemented. Broader sustained driving/GPU/device validation remains pending; cyclists remain deferred within Phase 9, and audio remains Phase 11.
 
 ## Structure
 
 - `src/simulation.ts`: Gear-selection interlocks, switch timing, shared drivetrain forces, and the Phase 2 planar reference model, in metres/seconds/radians.
 - `src/driver-input.ts`: Independent held input sources, operating switches, binding validation, and versioned preferences.
 - `src/cockpit.ts`: Validated view preferences, controlled head movement, driver/mirror camera placement, reflection geometry, and mirror update budget.
-- `src/driving-conditions.ts`: Validated saved lighting presets and condition/headlight guidance; dry-road baseline remains unchanged.
+- `src/driving-conditions.ts`: Validated saved lighting/weather/wiper presets, migration, wet tuning, and condition/headlight guidance.
 - `src/driving-lighting.ts`: Shared scene lighting, chassis-following headlights, and fixed shadow-map budget.
+- `src/windshield-rain.ts`: Deterministic water accumulation, swept-sector clearing, and world-space streak positions.
+- `src/weather-visuals.ts`: Bounded rain streaks, forward glass texture, and blade meshes.
 - `src/render-profile.ts`: Opt-in local development frame-rate and CPU measurements.
 - `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
 - `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and future audio events.
@@ -258,6 +283,7 @@ This increment follows the roadmap's dusk/night-first sequence. Rain, wet-road g
 - `tests/driver-controls.test.mjs`: Explicit pedal/selector behavior, parking hold, input overlap/interruption, bindings, switch timing, repair/reset, and frame-rate consistency.
 - `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
 - `tests/driving-conditions.test.mjs`: Lighting preferences, baseline restoration, headlight coverage and mirror visibility, resource limits, traffic lamps, and unchanged dry-road stops across frame rates.
+- `tests/weather.test.mjs`: Condition migration, rain fog/restoration, windshield clearing and budgets, wet stops/force limits, grass preservation, and physical wet traffic/crossing regressions.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
@@ -373,7 +399,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Pedestrians cross only in safe gaps, AI stops before the crossing and resumes after clearance, and turning traffic yields too. Repeatable partial occlusion and player/AI impacts exercise finite mass, displacement/toppling, low/high and glancing impacts, resting-contact safeguards, high-speed CCD, retirement/reset/disable cleanup, and identical state at 30/60/144 Hz. Earlier driving and traffic checks remain passing. Check cockpit/mirror visibility and measure Busy traffic with pedestrians.
 
-### Phase 10 — Lighting, weather, and surface conditions (first lighting increment implemented)
+### Phase 10 — Lighting, weather, and surface conditions (basic lighting and rain implemented)
 
 **Focus:** Vary driving conditions after dry-road behavior is stable.
 
@@ -381,7 +407,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Add rain, wet-road grip, and reduced visibility one condition at a time; add wipers when rain affects the windshield.
 - Keep each condition configurable so it can be compared against the dry daytime baseline.
 
-**Testing checkpoint:** Changes in visibility and stopping distance are consistent and measurable. Lighting, mirrors, and weather effects remain usable at the target frame rate. The first increment's lighting, unchanged dry-road stopping checks, and initial browser profiling are described above; rain, wet grip, windshield effects/wipers, and broader device validation remain pending.
+**Testing checkpoint:** Changes in visibility and stopping distance are consistent and measurable. Lighting, mirrors, and weather effects remain usable at the target frame rate. Implemented comparisons and local browser profiling are described above: 12.32 m dry versus 19.08 m wet stopping, fixed-step windshield effects/wipers, and sustained physical wet traffic checks. A supported-device frame-rate target and broader driving/GPU/device validation remain pending.
 
 ### Phase 11 — Driving audio
 

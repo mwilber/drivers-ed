@@ -10,6 +10,9 @@ import type { TrafficCar } from './vehicle-traffic.ts';
 import { createPedestrianVisuals } from './pedestrian-visuals.ts';
 import { createDrivingLighting } from './driving-lighting.ts';
 import type { TimeOfDay } from './driving-conditions.ts';
+import type { Weather } from './driving-conditions.ts';
+import { createWeatherVisuals } from './weather-visuals.ts';
+import { WindshieldRain } from './windshield-rain.ts';
 import type { Pedestrian } from './pedestrians.ts';
 import { MIRRORS, MIRROR_BUDGET, MirrorSchedule, mirrorGeometry, placeDriverCamera, placeMirrorCamera, type ViewSettings } from './cockpit.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
@@ -170,6 +173,8 @@ export function createScene(canvas: HTMLCanvasElement) {
   box(steeringWheel, 0.105, 0.072, 0.05, 0, 0, 0.015, 0x26322f);
 
   const camera = new THREE.PerspectiveCamera(68, 1, 0.035, 900);
+  const weatherVisuals = createWeatherVisuals(scene, car);
+  const emptyWindshield = new WindshieldRain();
   scene.add(camera);
   const mirrorScene = new THREE.Scene();
   const mirrorOverlay = new THREE.OrthographicCamera(0, window.innerWidth, window.innerHeight, 0, -1, 1);
@@ -195,10 +200,13 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day') {
-      lighting.update(timeOfDay, state.headlights, physics.position, physics.rotation);
+    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry', windshield = emptyWindshield) {
+      lighting.update(timeOfDay, state.headlights, physics.position, physics.rotation, weather);
+      weatherVisuals.update(weather, trafficTime, physics.position, windshield);
+      material(0x596168).roughness = weather === 'rain' ? 0.42 : 0.92;
+      material(0x596168).color.setHex(weather === 'rain' ? 0x444d55 : 0x596168);
       roadVisuals.update(trafficTime);
-      trafficVisuals.update(traffic, trafficTime, timeOfDay);
+      trafficVisuals.update(traffic, trafficTime, timeOfDay, weather);
       pedestrianVisuals.update(pedestrians, trafficTime);
       damageVisuals.update(physics.damage);
       for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
