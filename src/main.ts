@@ -66,6 +66,7 @@ function clearInput() {
 function interrupt() {
   clearInput();
   physics?.pause();
+  trafficPhysics?.pause();
   clock.reset();
 }
 function reset(spawn?: Spawn) {
@@ -351,7 +352,7 @@ function drawMap() {
   c.fillText('P', 107, 118);
   for (const vehicle of traffic.cars) {
     c.save(); c.translate(vehicle.x, vehicle.z); c.rotate(-vehicle.heading);
-    c.fillStyle = '#577a96'; c.fillRect(-1.8, -3, 3.6, 6); c.restore();
+    c.fillStyle = vehicle.damage.condition === 'undamaged' ? '#577a96' : '#b56a38'; c.fillRect(-1.8, -3, 3.6, 6); c.restore();
   }
   c.translate(car.x, car.z);
   c.rotate(-car.heading);
@@ -402,9 +403,12 @@ async function start() {
       traffic.step(trafficSignals.seconds, car);
       trafficPhysics!.sync(traffic.cars);
       physics!.step(input, step);
+      trafficPhysics!.afterStep(traffic, step);
       trafficSignals.step();
     });
-    document.querySelector('#traffic-status')!.textContent = `${traffic.cars.length} vehicles · ${traffic.completed} routes completed`;
+    const damagedTraffic = traffic.cars.filter(car => car.damage.condition !== 'undamaged').length;
+    document.querySelector('#traffic-status')!.textContent = `${traffic.cars.length} vehicles · ${traffic.completed} routes completed${damagedTraffic ? ` · ${damagedTraffic} damaged` : ''}`;
+    trafficPhysics!.drainEvents(); // Reserved for spatial traffic audio in Phase 11.
     const damage = physics!.damage;
     const impacts = damage.drainEvents().filter(event => event.kind === 'impact');
     if (impacts.length) {

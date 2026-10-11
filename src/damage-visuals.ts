@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { DAMAGE_PANELS, type DamagePanel, type VehicleDamage } from './vehicle-damage.ts';
 
 /** Each panel owns its material and original geometry; repairs never accumulate transforms. */
-export function createDamageVisuals() {
+export function createDamageVisuals(paint = 0xc8cec8) {
   const group = new THREE.Group();
   const panels = new Map<DamagePanel, { meshes: { mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>; original: Float32Array }[]; marks: THREE.Group }>();
   for (const panel of DAMAGE_PANELS) panels.set(panel, { meshes: [], marks: new THREE.Group() });
   function panelBox(panel: DamagePanel, width: number, height: number, depth: number, x: number, y: number, z: number) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth, 4, 2, 4), new THREE.MeshStandardMaterial({ color: 0xc8cec8, roughness: 0.92 }));
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth, 4, 2, 4), new THREE.MeshStandardMaterial({ color: paint, roughness: 0.92 }));
     mesh.position.set(x, y, z);
     mesh.castShadow = mesh.receiveShadow = true;
     group.add(mesh);
@@ -41,10 +41,12 @@ export function createDamageVisuals() {
     group.add(marks);
   }
   let revision = -1;
+  let lastDamage: VehicleDamage | undefined;
   return {
     group,
     update(damage: VehicleDamage) {
-      if (revision === damage.revision) return;
+      if (lastDamage === damage && revision === damage.revision) return;
+      lastDamage = damage;
       revision = damage.revision;
       for (const panel of DAMAGE_PANELS) {
         const { dent, scratch } = damage.panels[panel];
@@ -58,7 +60,7 @@ export function createDamageVisuals() {
           }
           positions.needsUpdate = true;
           mesh.geometry.computeVertexNormals();
-          mesh.material.color.set(0xc8cec8).lerp(new THREE.Color(0x7c8177), dent * 0.55);
+          mesh.material.color.set(paint).lerp(new THREE.Color(0x7c8177), dent * 0.55);
         }
         visual.marks.visible = scratch > 0;
         visual.marks.children.forEach((mark, index) => { mark.visible = index < Math.ceil(scratch * 7); });

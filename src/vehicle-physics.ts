@@ -34,6 +34,7 @@ export class VehiclePhysics {
   readonly damage = new VehicleDamage();
   private readonly eventQueue = new RAPIER.EventQueue(true);
   private readonly colliderMaterials = new Map<number, string>();
+  private readonly damageBodies = new Map<number, { body: RAPIER.RigidBody; damage: VehicleDamage }>();
   body!: RAPIER.RigidBody;
   vehicle!: RAPIER.DynamicRayCastVehicleController;
   position = { x: 0, y: 0, z: 0 };
@@ -78,11 +79,20 @@ export class VehiclePhysics {
     else this.colliderMaterials.delete(handle);
   }
 
+  registerDamageBody(body: RAPIER.RigidBody, damage: VehicleDamage): void {
+    this.damageBodies.set(body.handle, { body, damage });
+  }
+  unregisterDamageBody(body: RAPIER.RigidBody): void { this.damageBodies.delete(body.handle); }
+
   reset(spawn: Spawn = this.options.spawn ?? createCar()): void {
     this.damage.repair();
     this.eventQueue.clear();
     if (this.vehicle) this.world.removeVehicleController(this.vehicle);
-    if (this.body) this.world.removeRigidBody(this.body);
+    if (this.body) {
+      this.unregisterDamageBody(this.body);
+      for (let i = 0; i < this.body.numColliders(); i++) this.setColliderMaterial(this.body.collider(i).handle);
+      this.world.removeRigidBody(this.body);
+    }
     Object.assign(this.state, createCar(), spawn);
     if (this.options.explicitControls) selectGear(this.state, 'P');
     const hit = this.world.castRay(new RAPIER.Ray({ x: spawn.x, y: 100, z: spawn.z }, { x: 0, y: -1, z: 0 }), 200, true);
@@ -91,12 +101,14 @@ export class VehiclePhysics {
       .setTranslation(spawn.x, ground + SUSPENSION.centerOfMassHeight, spawn.z)
       .setRotation({ x: 0, y: Math.sin(spawn.heading / 2), z: 0, w: Math.cos(spawn.heading / 2) })
       .setCcdEnabled(true).setAngularDamping(0.3).setAdditionalSolverIterations(4));
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(CAR.width / 2, 0.21, CAR.length / 2)
+    const bodyCollider = this.world.createCollider(RAPIER.ColliderDesc.cuboid(CAR.width / 2, 0.21, CAR.length / 2)
       .setTranslation(0, 0.51 - SUSPENSION.centerOfMassHeight, 0).setMass(CAR.mass).setFriction(0.25).setRestitution(0)
       .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS), this.body);
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.82, 0.4, 0.88)
+    const cabinCollider = this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.82, 0.4, 0.88)
       .setTranslation(0, 1.17 - SUSPENSION.centerOfMassHeight, 0.28).setMass(0).setFriction(0.25)
       .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS), this.body);
+    this.setColliderMaterial(bodyCollider.handle, 'vehicle'); this.setColliderMaterial(cabinCollider.handle, 'vehicle');
+    this.registerDamageBody(this.body, this.damage);
     this.vehicle = this.world.createVehicleController(this.body);
     this.vehicle.indexUpAxis = 1;
     this.vehicle.setIndexForwardAxis = 2;
@@ -151,49 +163,59 @@ export class VehiclePhysics {
     this.body.wakeUp();
     this.vehicle.updateVehicle(dt, undefined, undefined, collider => collider.parent()?.handle !== this.body.handle);
     // Capture contact-point approach velocity before the collision solver changes it.
-    const velocity = this.body.linvel(), angular = this.body.angvel();
+    const velocities = new Map([...this.damageBodies].map(([handle, { body }]) => [handle, { linear: body.linvel(), angular: body.angvel() }]));
     this.world.step(this.eventQueue);
-    this.recordDamage(velocity, angular, dt);
+    this.recordDamage(velocities, dt);
     this.sync();
     this.state.acceleration = (this.state.speed - previousSpeed) / dt;
   }
 
-  private recordDamage(velocity: RAPIER.Vector, angular: RAPIER.Vector, dt: number): void {
-    const samples = new Map<number, DamageContact>();
-    const position = this.body.translation(), rotation = this.body.rotation();
-    const inverse = { x: -rotation.x, y: -rotation.y, z: -rotation.z, w: rotation.w };
+  private recordDamage(velocities: Map<number, { linear: RAPIER.Vector; angular: RAPIER.Vector }>, dt: number): void {
+    const samples = new Map<number, Map<number, DamageContact>>();
+    const pointVelocity = (body: RAPIER.RigidBody | null, point: RAPIER.Vector): RAPIER.Vector => {
+      const motion = body && velocities.get(body.handle);
+      if (!body || !motion) return { x: 0, y: 0, z: 0 };
+      const position = body.translation(), angular = motion.angular;
+      const arm = { x: point.x - position.x, y: point.y - position.y, z: point.z - position.z };
+      return { x: motion.linear.x + angular.y * arm.z - angular.z * arm.y,
+        y: motion.linear.y + angular.z * arm.x - angular.x * arm.z,
+        z: motion.linear.z + angular.x * arm.y - angular.y * arm.x };
+    };
     this.eventQueue.drainContactForceEvents(event => {
       const first = this.world.getCollider(event.collider1()), second = this.world.getCollider(event.collider2());
-      const car = first.parent()?.handle === this.body.handle ? first : second;
-      const other = car === first ? second : first;
-      if (car.parent()?.handle !== this.body.handle || other.parent()?.handle === this.body.handle) return;
       const impulse = event.totalForceMagnitude() * dt;
-      this.world.contactPair(car, other, (manifold, flipped) => {
-        const raw = manifold.normal();
-        const sign = flipped ? -1 : 1;
-        const normal = { x: raw.x * sign, y: raw.y * sign, z: raw.z * sign };
-        for (let i = 0; i < manifold.numSolverContacts(); i++) {
-          const point = manifold.solverContactPoint(i);
-          if (!point || manifold.solverContactDist(i) > 0.01) continue;
-          const arm = { x: point.x - position.x, y: point.y - position.y, z: point.z - position.z };
-          const localPoint = rotate(arm, inverse);
-          const contactVelocity = {
-            x: velocity.x + angular.y * arm.z - angular.z * arm.y,
-            y: velocity.y + angular.z * arm.x - angular.x * arm.z,
-            z: velocity.z + angular.x * arm.y - angular.y * arm.x,
-          };
-          const closingSpeed = Math.max(0, dot(contactVelocity, normal));
-          const tangentSpeed = Math.sqrt(Math.max(0, dot(contactVelocity, contactVelocity) - dot(contactVelocity, normal) ** 2));
-          // Upright underside support is terrain contact, not a body scrape.
-          if (localPoint.y < -0.2 && Math.abs(dot(normal, this.up)) > 0.7 && closingSpeed < 2.5) continue;
-          const sample = { obstacle: other.handle, point, localPoint, normal, localNormal: rotate(normal, inverse), closingSpeed, tangentSpeed, impulse,
-            material: this.colliderMaterials.get(other.handle) ?? 'concrete' };
-          const previous = samples.get(other.handle);
-          if (!previous || closingSpeed > previous.closingSpeed) samples.set(other.handle, sample);
-        }
-      });
+      for (const car of [first, second]) {
+        const body = car.parent(), other = car === first ? second : first;
+        if (!body || !this.damageBodies.has(body.handle) || other.parent()?.handle === body.handle) continue;
+        const position = body.translation(), rotation = body.rotation();
+        const inverse = { x: -rotation.x, y: -rotation.y, z: -rotation.z, w: rotation.w };
+        const contacts = samples.get(body.handle) ?? new Map<number, DamageContact>();
+        samples.set(body.handle, contacts);
+        this.world.contactPair(car, other, (manifold, flipped) => {
+          const raw = manifold.normal();
+          const sign = flipped ? -1 : 1;
+          const normal = { x: raw.x * sign, y: raw.y * sign, z: raw.z * sign };
+          for (let i = 0; i < manifold.numSolverContacts(); i++) {
+            const point = manifold.solverContactPoint(i);
+            if (!point || manifold.solverContactDist(i) > 0.01) continue;
+            const arm = { x: point.x - position.x, y: point.y - position.y, z: point.z - position.z };
+            const localPoint = rotate(arm, inverse);
+            const own = pointVelocity(body, point), opposing = pointVelocity(other.parent(), point);
+            const contactVelocity = { x: own.x - opposing.x, y: own.y - opposing.y, z: own.z - opposing.z };
+            const closingSpeed = Math.max(0, dot(contactVelocity, normal));
+            const tangentSpeed = Math.sqrt(Math.max(0, dot(contactVelocity, contactVelocity) - dot(contactVelocity, normal) ** 2));
+            // Upright underside support is terrain contact, not a body scrape.
+            const localNormal = rotate(normal, inverse);
+            if (localPoint.y < -0.2 && Math.abs(localNormal.y) > 0.7 && closingSpeed < 2.5) continue;
+            const sample = { obstacle: other.handle, point, localPoint, normal, localNormal, closingSpeed, tangentSpeed, impulse,
+              material: this.colliderMaterials.get(other.handle) ?? 'concrete' };
+            const previous = contacts.get(other.handle);
+            if (!previous || closingSpeed > previous.closingSpeed) contacts.set(other.handle, sample);
+          }
+        });
+      }
     });
-    this.damage.update([...samples.values()], dt);
+    for (const [handle, { damage }] of this.damageBodies) damage.update([...(samples.get(handle)?.values() ?? [])], dt);
   }
 
   /** Include lateral and vertical movement in the complete-stop selector interlock. */

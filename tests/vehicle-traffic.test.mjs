@@ -173,9 +173,11 @@ test('traffic bodies collide with the player, report vehicle damage, and are rem
   sim.selectGear('N'); sim.body.setLinvel({ x: 0, y: 0, z: -8 }, true);
   const events = [];
   for (let i = 0; i < 2 * 120; i++) {
-    bridge.sync(traffic.cars); sim.step({ forward: false, reverse: false, left: false, right: false }); events.push(...sim.damage.drainEvents());
+    bridge.sync(traffic.cars); sim.step({ forward: false, reverse: false, left: false, right: false }); bridge.afterStep(traffic); events.push(...sim.damage.drainEvents());
   }
-  assert.ok(sim.state.z > 14, 'player cannot pass through the traffic body');
+  assert.ok(sim.state.z >= car.z + CAR.length - 0.1, 'player remains behind the displaced traffic body');
+  assert.ok(car.z < 8, 'impact pushes the other sedan');
+  assert.ok(car.damage.panels.rear.dent > 0, 'both participants take damage');
   assert.ok(events.some(e => e.kind === 'impact' && e.material === 'vehicle'));
   bridge.clear(); assert.equal(bridge.count, 0);
   sim.reset(); assert.equal(sim.damage.condition, 'undamaged');

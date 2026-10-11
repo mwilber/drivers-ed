@@ -3,6 +3,7 @@ import { junction, type Lane, type LaneConnection, type Point } from './road-net
 import { signalState } from './traffic-rules.ts';
 import { FIXED_STEP } from './simulation-clock.ts';
 import { CAR } from './vehicle-config.ts';
+import { VehicleDamage } from './vehicle-damage.ts';
 
 export const TRAFFIC_DENSITIES = { off: 0, single: 1, light: 6, busy: 16 } as const;
 export type TrafficDensity = keyof typeof TRAFFIC_DENSITIES;
@@ -12,6 +13,7 @@ export interface TrafficCar extends TrafficActor {
   id: number; laneId: string; connectionId?: string; progress: number; route: string[];
   routeIndex: number; stoppedFor: number; arrivedAt?: number; braking: boolean;
   indicator: 'left' | 'right' | 'off'; reason: string; distanceTravelled: number;
+  damage: VehicleDamage; physical: boolean; driveSpeed: number; stunnedFor: number; recovering: boolean;
 }
 const lanes = new Map(LANES.map(l => [l.id, l]));
 const connections = new Map(LANE_CONNECTIONS.map(c => [c.id, c]));
@@ -59,7 +61,8 @@ export class VehicleTraffic {
     if (!route.length || route.some(id => !lanes.has(id))) throw new Error('Invalid traffic route');
     for (let i = 1; i < route.length; i++) if (!LANE_CONNECTIONS.some(c => c.incoming === route[i - 1] && c.outgoing === route[i])) throw new Error('Disconnected traffic route');
     const car: TrafficCar = { id: this.nextId++, laneId: route[0]!, route: [...route], routeIndex: 0, progress,
-      x: 0, z: 0, heading: 0, speed, stoppedFor: 0, braking: false, indicator: 'off', reason: 'Cruising', distanceTravelled: 0 };
+      x: 0, z: 0, heading: 0, speed, stoppedFor: 0, braking: false, indicator: 'off', reason: 'Cruising', distanceTravelled: 0,
+      damage: new VehicleDamage(), physical: false, driveSpeed: speed, stunnedFor: 0, recovering: false };
     this.pose(car); this.cars.push(car); return car;
   }
   reset(player?: TrafficActor): void {
@@ -76,6 +79,32 @@ export class VehicleTraffic {
   private remove(car: TrafficCar): void {
     this.cars.splice(this.cars.indexOf(car), 1);
     for (const [id, owner] of this.reservations) if (owner === car.id) this.reservations.delete(id);
+  }
+  /** Retire a physically blocked driver without counting it as a completed route. */
+  retire(car: TrafficCar): void { if (this.cars.includes(car)) this.remove(car); }
+
+  /** Project the actual body onto its current route, preserving displacement in public poses. */
+  reconcile(car: TrafficCar, pose: TrafficActor): number {
+    const lane = lanes.get(car.laneId)!;
+    let nearest: Point;
+    if (car.connectionId) {
+      const c = connections.get(car.connectionId)!;
+      let best = Infinity, travelled = 0;
+      for (let i = 1; i < c.points.length; i++) {
+        const a = c.points[i - 1]!, b = c.points[i]!, length = distance(a, b);
+        const t = Math.max(0, Math.min(1, ((pose.x - a.x) * (b.x - a.x) + (pose.z - a.z) * (b.z - a.z)) / length ** 2));
+        const point = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+        const deviation = distance(pose, point);
+        if (deviation < best) { best = deviation; car.progress = travelled + t * length; }
+        travelled += length;
+      }
+      nearest = connectionPose(c, car.progress);
+    } else {
+      car.progress = Math.max(0, (pose.x - lane.start.x) * lane.direction.x + (pose.z - lane.start.z) * lane.direction.z);
+      nearest = { x: lane.start.x + lane.direction.x * car.progress, z: lane.start.z + lane.direction.z * car.progress };
+    }
+    Object.assign(car, pose);
+    return distance(pose, nearest);
   }
   private populate(player?: TrafficActor): void {
     const eligible = LANES.filter(l => l.streetId !== 'lot-access');
@@ -112,6 +141,7 @@ export class VehicleTraffic {
     if (this.reservations.has(c.junctionId)) return this.reservations.get(c.junctionId) === car.id;
     if (!this.outgoingClear(c, player)) { car.reason = 'Exit blocked'; return false; }
     if (player && Math.abs(player.x - node.x) < 16 && Math.abs(player.z - node.z) < 16) { car.reason = 'Yielding to player'; return false; }
+    if (this.cars.some(other => other !== car && other.recovering && Math.abs(other.x - node.x) < 16 && Math.abs(other.z - node.z) < 16)) { car.reason = 'Collision ahead'; return false; }
     if (approach.kind === 'signal') {
       const color = signalState(signalSeconds)[approach.signalGroup];
       // At the admission point the car is stopped: yellow always allows a safe stop.
@@ -186,14 +216,16 @@ export class VehicleTraffic {
     // Following checks use pre-step poses; reservations admit cars in stable spawn order.
     const actors = this.cars.map(car => ({ ...car }));
     for (const car of this.cars) {
-      if (!car.connectionId && car.speed < 0.05 && trafficStopProgress(lanes.get(car.laneId)!) - car.progress < 0.15) {
+      if (!car.connectionId && Math.abs(car.speed) < 0.05 && trafficStopProgress(lanes.get(car.laneId)!) - car.progress < (car.physical ? 1.5 : 0.15)) {
         car.arrivedAt ??= this.seconds; car.stoppedFor += FIXED_STEP;
       }
     }
     const finished: TrafficCar[] = [];
     for (const car of this.cars) {
+      if (car.stunnedFor > 0) { car.driveSpeed = 0; car.braking = true; car.reason = 'Collision recovery'; continue; }
       const lane = lanes.get(car.laneId)!, c = this.nextConnection(car);
       let target = Math.min(9, (speedZoneAt(car)?.mph ?? 25) * 0.44704);
+      if (car.recovering) target = Math.min(target, 2);
       let available = Infinity;
       car.reason = 'Cruising';
       if (!car.connectionId) {
@@ -201,25 +233,30 @@ export class VehicleTraffic {
         car.indicator = c && remaining < 30 && c.turn !== 'straight' ? c.turn : 'off';
         const reserved = this.reservations.get(lane.to) === car.id;
         if (c && !reserved) {
-          if (remaining < 0.15 && car.speed < 0.05 && this.permitted(car, c, signalSeconds, player)) this.reservations.set(lane.to, car.id);
+          if (remaining < (car.physical ? 1.5 : 0.15) && Math.abs(car.speed) < 0.05 && this.permitted(car, c, signalSeconds, player)) this.reservations.set(lane.to, car.id);
           else available = Math.max(0, remaining);
         } else if (!c) available = Math.max(0, laneLength(lane) - car.progress);
         if (remaining < 25 && c?.turn !== 'straight') target = Math.min(target, TRAFFIC_TUNING.turnSpeed);
       } else target = Math.min(target, TRAFFIC_TUNING.turnSpeed);
       const obstacle = this.obstacleDistance(car, [...actors.filter(a => a.id !== car.id), ...(player ? [player] : [])]);
       if (obstacle < available) { available = Math.max(0, obstacle - TRAFFIC_TUNING.gap); car.reason = 'Following / obstruction'; }
-      target = Math.min(target, Math.sqrt(2 * TRAFFIC_TUNING.braking * Math.max(0, available - 0.04)));
+      // Dynamic motors need stopping room for their response lag; never erase velocity to meet a stop target.
+      const brakeMargin = car.physical ? 0.4 + Math.max(0, car.speed) * 0.35 : 0.04;
+      target = Math.min(target, Math.sqrt(2 * TRAFFIC_TUNING.braking * Math.max(0, available - brakeMargin)));
       if (Number.isFinite(obstacle)) target = Math.min(target, Math.max(0, (obstacle - TRAFFIC_TUNING.gap) / TRAFFIC_TUNING.headway));
-      const previous = car.speed;
-      car.speed = Math.max(0, car.speed + Math.max(-TRAFFIC_TUNING.braking * FIXED_STEP, Math.min(TRAFFIC_TUNING.acceleration * FIXED_STEP, target - car.speed)));
+      const previous = car.physical ? car.driveSpeed : car.speed;
+      car.speed = Math.max(0, previous + Math.max(-TRAFFIC_TUNING.braking * FIXED_STEP, Math.min(TRAFFIC_TUNING.acceleration * car.damage.effects.power * FIXED_STEP, target - previous)));
       let movement = Math.min(available, (previous + car.speed) / 2 * FIXED_STEP);
       if (available <= 0.05) { car.speed = 0; movement = 0; }
+      car.driveSpeed = car.speed;
       car.braking = car.speed < previous || car.speed < 0.05;
       car.progress += movement; car.distanceTravelled += movement;
-      if (!car.connectionId && !c && laneLength(lane) - car.progress <= 0.05) { finished.push(car); continue; }
+      if (!car.connectionId && !c && laneLength(lane) - car.progress <= (car.physical ? 0.6 : 0.05) && Math.abs(car.speed) < 0.1) { finished.push(car); continue; }
       if (!car.connectionId && car.progress >= laneLength(lane)) {
         if (!c) { finished.push(car); continue; }
         car.progress -= laneLength(lane); car.connectionId = c.id;
+        // A collision can physically push a waiting car into a junction; reserve its clearance too.
+        if (!this.reservations.has(lane.to)) this.reservations.set(lane.to, car.id);
       }
       if (car.connectionId && car.progress >= lengths.get(car.connectionId)!) {
         const current = connections.get(car.connectionId)!;

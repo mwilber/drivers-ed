@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 8's first playable increment adds predictable vehicle traffic, following/braking, intersection priority, adjustable density, and repeatable encounters on Phase 7's US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 8b adds collisions that push and rotate traffic, damage both sedans, and let displaced drivers recover gradually. Phase 8's predictable traffic, following/braking, intersection priority, adjustable density, and repeatable encounters use Phase 7's US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed cockpit and vehicle traffic in Phase 8](docs/screenshots/app-phase-8.jpg)
+![Drivers Ed cockpit after a traffic collision in Phase 8b](docs/screenshots/app-phase-8b.jpg)
 
 ## Run locally
 
@@ -44,7 +44,7 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | Shoulder / Back buttons (hold) | Pointer, touch, or focused Space/Enter head checks |
 | View settings button | Adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
 | Try a road example selector | Reset in Park before signals, a stop/yield junction, or parallel parking; restart the signal cycle |
-| Traffic examples in the road example selector | Repeat following/signals, simultaneous stops, a permissive left turn, or a yield encounter with fixed traffic starts |
+| Traffic examples in the road example selector | Repeat following/signals, simultaneous stops, a permissive left turn, a yield encounter, or a collision with fixed traffic starts |
 | Vehicle traffic selector | Off, a single vehicle, Light (up to 6), or Busy (up to 16); changes traffic in place |
 | Test area button | Reset upright on the approach to the suspension test ramp |
 | Repair car button | Restore appearance and handling in place, preserving position and motion |
@@ -171,10 +171,24 @@ Acceptance checks cover every lane and permitted turn path with a full sedan foo
 - Junction entry is deliberately cautious: every AI driver pauses before entering, including at green signals and uncontrolled bends. Stop-controlled drivers dwell for at least 0.7 s, stopping their front bumper 0.4 m behind the stop bar. All-way stops respect arrival order and the driver on the right at simultaneous arrivals; a stable tie break resolves a complete four-way priority cycle. Stop/yield branches yield to the leading through-route vehicle; permissive left turns yield to the opposing leader. Cars waiting farther back do not block a left turn independently of their leader.
 - One AI vehicle reserves a junction at a time, retaining ownership until its rear clears the exit. Red/yellow deny new entry; already committed vehicles clear after the lights change. Drivers check exit space before admission and conservatively yield to a player inside or moving toward the junction. This serializes compatible movements and can produce long queues at Busy density; it is an initial predictable traffic model, not a complete human-driver model.
 - **Vehicle traffic** defaults to Light, with Off / Single / Light / Busy caps of 0 / 1 / 6 / 16. Seeded spawning checks an 18 m clearance from existing cars and the player and retries once per simulation second when space is unavailable. Route completion removes the car and its collider; ordinary traffic replenishes to the selected cap. Lowering density removes excess cars and reservations immediately. Reset restarts traffic and signals deterministically; repair preserves traffic. All traffic freezes during existing settings/focus/visibility/graphics interruptions.
-- The four **Traffic:** road examples reset the player in Park facing the encounter and install finite, repeatable fixtures. They display **Scenario vehicles** and do not replenish. Selecting a density returns to ordinary spawning; Reset or another road example exits the fixture (defaulting to Light). Re-select the same example to repeat it. Brake lamps, turn indicators, map markers, and all three existing mirror passes include traffic.
-- Traffic colliders are kinematic Rapier bodies. The player can collide with them and receive the existing damage feedback, tagged as `vehicle` impact material. AI cars keep their authored routes and cannot be pushed off them; AI suspension, crash response, lane changes, overtaking, horn response, and evasive recovery are deferred. Deliberate player collisions or parking across a junction can obstruct traffic; reset or turn traffic off to clear it.
+- The five **Traffic:** road examples reset the player in Park facing the encounter and install finite, repeatable fixtures. They display **Scenario vehicles** and do not replenish. Selecting a density returns to ordinary spawning; Reset or another road example exits the fixture (defaulting to Light). Re-select the same example to repeat it. Brake lamps, turn indicators, map markers, and all three existing mirror passes include traffic.
+- Phase 8b replaces the initial kinematic colliders with dynamic sedans that can be pushed and rotated. Both cars receive localized damage; collision response and recovery are described below. Lane changes, overtaking, horn response, and evasive driving remain deferred. Parking across a junction can obstruct traffic; reset or turn traffic off to clear it.
 
 Acceptance checks cover finite route completion and pavement alignment, following/spacing behind a stationary player and release, stop-bar clearance, red/yellow entry and committed clearance, stop dwell and simultaneous arrival ordering, permissive left turns, through-route priority, player intrusion, blocked exits, safe spawning/removal/reset, and identical outcomes at 30/60/144 Hz. A ten-minute 16-car run checks sampled oriented footprints for collisions, at least eight completed routes, and continued progress for surviving cars over its final four minutes. The test reports fixed-step AI cost on the executing host; this does not establish a browser/device frame-rate guarantee. Desktop, phone, and compact landscape browser smoke checks cover density, fixtures, rendering, and control access. Hardware profiling remains future validation.
+
+## Phase 8b — Traffic collision response and damage (implemented)
+
+Traffic uses finite-mass, 1,500 kg dynamic Rapier bodies in the player's world. Bounded driving forces and yaw torque let rear, side, and head-on impacts transfer momentum and rotate a sedan. The controller reads the resulting physical pose after each shared step; it never restores an old pose or overwrites impact velocity. Traffic braking includes a stopping margin for the dynamic controller.
+
+Both participants measure damage using relative contact-point velocity and solver impulse. Each traffic car retains its own panel dents, scratches, and bounded power loss. Continuing pushes and resting contacts retain the existing damage safeguards. Damage is visible in every mirror pass; orange map markers and the traffic instrument's damaged count identify affected cars. Pooled rendering slots restore geometry and paint when reused.
+
+After an impact, an AI driver pauses its motor for 0.8 simulation seconds, then brakes and recovers gradually toward its route at reduced speed. Following and intersection decisions use physical positions, and recovering cars inside a junction block new entry. Recovery blocked for 20 seconds retires the car and releases its reservation, colliders, and damage registration. Ordinary traffic replenishes; finite scenario vehicles do not. Pause, density changes, and reset retain their existing lifecycle behavior.
+
+Choose **Traffic: collision and damage** in the road example selector, select Drive, and accelerate into the stopped sedan ahead to repeat a rear impact. Re-select the example to restore both cars. **Repair car** repairs only the player's sedan; traffic damage persists until that car leaves or traffic resets.
+
+The traffic chassis is deliberately grounded: it can move horizontally and yaw, but has no wheel suspension, vertical displacement, pitch, roll, or rollover simulation. The player retains full suspension and three-dimensional chassis physics.
+
+Acceptance checks cover proportional rear impacts, side displacement/yaw, head-on impacts, a moving AI car striking a stationary player, glancing scratches on both cars, resting-contact safeguards, gradual recovery without pose/velocity replacement, blocked recovery cleanup, pooled visual restoration, and identical collision/damage outcomes at 30/60/144 Hz. A ten-minute Busy run includes the player, up to 16 dynamic traffic cars, AI, and neighborhood physics, checks route completion without routine impacts, and reports shared-step cost (about 0.18 ms on the development host). This measurement is not a browser/device frame-rate guarantee. All 100 regression tests pass.
 
 ## Structure
 
@@ -190,9 +204,9 @@ Acceptance checks cover finite route completion and pavement alignment, followin
 - `src/traffic-layout.ts`: Confirmed US profile, live lane graph, approaches, speed zones, signs, signal fixtures, and repeatable example spawns.
 - `src/traffic-rules.ts`: Fixed-step signal clock, movement-rule metadata, and upcoming-control guidance.
 - `src/vehicle-traffic.ts`: Seeded lane drivers, following/braking, junction priority/reservations, and density lifecycle.
-- `src/traffic-scenarios.ts`: Repeatable following, stop, left-turn, and through-priority fixtures.
-- `src/traffic-physics.ts`: Bounded traffic collider lifecycle in the player's Rapier world.
-- `src/traffic-visuals.ts`: Shared placeholder sedan geometry, brake lamps, and indicators.
+- `src/traffic-scenarios.ts`: Repeatable following, stop, left-turn, through-priority, and collision fixtures.
+- `src/traffic-physics.ts`: Dynamic traffic motors, physical pose reconciliation, collision recovery, and collider/damage lifecycle in the player's Rapier world.
+- `src/traffic-visuals.ts`: Pooled placeholder sedans with independent damage panels, brake lamps, and indicators.
 - `src/road-visuals.ts`: Shared road markings, signs, arrows, support posts, and signal lenses.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
@@ -202,6 +216,7 @@ Acceptance checks cover finite route completion and pavement alignment, followin
 - `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
+- `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
 - `tests/road-network.test.mjs`: Network connectivity, both driving sides, sedan/curb clearance, feasible turning radii, crossing openings, and parking geometry.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
@@ -289,6 +304,17 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Use repeatable traffic scenarios to diagnose collisions and deadlocks.
 
 **Testing checkpoint:** Vehicles maintain spacing, yield as intended, and complete routes without routine collisions or deadlocks. Test player interference and performance as traffic density increases. The first increment's conservative junction behavior, repeatable encounters, sustained-run acceptance checks, and profiling limitations are described above.
+
+### Phase 8b — Traffic collision response and damage (implemented)
+
+**Focus:** Make collisions between sedans transfer motion and damage to both vehicles while retaining predictable AI traffic.
+
+- Replace traffic's immovable kinematic colliders with finite-mass dynamic bodies. Use bounded driving forces so impacts can push and rotate a traffic car without a following-frame position snap.
+- Measure damage from relative contact-point velocity and solver impulses for both participants. Give each traffic car persistent, localized dents and scratches, retaining the existing resting-contact safeguards and bounded damage effects.
+- Let displaced drivers pause, brake, and recover toward their route gradually. Keep following and intersection occupancy based on their physical positions; retire traffic that cannot recover after a bounded interval and release its reservations and physics resources.
+- Preserve pause/reset/density behavior, repeatable traffic scenarios, mirrors, and free driving. Add a repeatable collision example and document the simplified traffic chassis model.
+
+**Testing checkpoint:** Rear, side, head-on, and glancing impacts move traffic in a plausible direction and damage the contacting panels on both cars. Stronger impacts produce greater motion/damage; resting contact does not repeatedly dent either car. Recovery never teleports or overwrites collision velocity, blocked recovery releases stale route locks, and outcomes agree at 30/60/144 Hz. Earlier handling, road-rule, density, and route checks remain passing; measure the dynamic traffic cost at Busy density.
 
 ### Phase 9 — Pedestrians and cyclists
 

@@ -7,6 +7,7 @@ export const TRAFFIC_SCENARIOS = {
   'traffic-stops': { label: 'Traffic: simultaneous all-way stop', spawn: { x: 2.5, z: -12, heading: 0 } },
   'traffic-left': { label: 'Traffic: left turn yields', spawn: { x: 2.5, z: 120, heading: 0 } },
   'traffic-yield': { label: 'Traffic: through-route priority', spawn: { x: 42, z: 62.5, heading: -Math.PI / 2 } },
+  'traffic-collision': { label: 'Traffic: collision and damage', spawn: { x: -37, z: 62.5, heading: -Math.PI / 2 } },
 } as const;
 export type TrafficScenario = keyof typeof TRAFFIC_SCENARIOS;
 /** Finite fixtures do not replenish, so an obstruction can be isolated and repeated. */
@@ -26,10 +27,13 @@ export function loadTrafficScenario(traffic: VehicleTraffic, id: TrafficScenario
     const straight = ['middle-n:north>center', 'middle-s:center>south', 'south-e:south>se'];
     traffic.add(left, trafficStopProgress(lane(left[0]!)));
     traffic.add(straight, trafficStopProgress(lane(straight[0]!)) - 6, 4);
-  } else {
+  } else if (id === 'traffic-yield') {
     const minor = ['town-e:center>east', 'east-s:east>se', 'south-e:se>south'];
     const through = ['east-n:ne>east', 'east-s:east>se', 'south-e:se>south'];
     traffic.add(minor, trafficStopProgress(lane(minor[0]!)));
     traffic.add(through, trafficStopProgress(lane(through[0]!)) - 6, 4);
+  } else {
+    const route = ['town-w:west>center', 'town-e:center>east', 'east-s:east>se'];
+    traffic.add(route, trafficStopProgress(lane(route[0]!)));
   }
 }
