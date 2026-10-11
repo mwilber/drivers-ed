@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 7 adds US road controls, working signals, shared lane connections, crossings and parking examples in an expanded southern neighborhood. The Rapier sedan retains Phase 6's shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 8's first playable increment adds predictable vehicle traffic, following/braking, intersection priority, adjustable density, and repeatable encounters on Phase 7's US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed cockpit and expanded neighborhood in Phase 7](docs/screenshots/app-phase-7.jpg)
+![Drivers Ed cockpit and vehicle traffic in Phase 8](docs/screenshots/app-phase-8.jpg)
 
 ## Run locally
 
@@ -44,6 +44,8 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | Shoulder / Back buttons (hold) | Pointer, touch, or focused Space/Enter head checks |
 | View settings button | Adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
 | Try a road example selector | Reset in Park before signals, a stop/yield junction, or parallel parking; restart the signal cycle |
+| Traffic examples in the road example selector | Repeat following/signals, simultaneous stops, a permissive left turn, or a yield encounter with fixed traffic starts |
+| Vehicle traffic selector | Off, a single vehicle, Light (up to 6), or Busy (up to 16); changes traffic in place |
 | Test area button | Reset upright on the approach to the suspension test ramp |
 | Repair car button | Restore appearance and handling in place, preserving position and motion |
 | Handling effects checkbox | Enable/disable damage-related handling changes; body damage remains visible |
@@ -158,9 +160,21 @@ The town uses **United States conventions and right-hand traffic**, as confirmed
 
 Use **Try a road example** to start before the town signals, lot all-way stop, Garden T-junction stop, east junction yield, or parallel parking bays. Selection resets the car undamaged in Park and restarts the signal cycle, while preserving view preferences and the damage-handling setting. The Test area and neighborhood Reset controls remain available.
 
-The controls use familiar [FHWA MUTCD sign, marking, and signal conventions](https://mutcd.fhwa.dot.gov/kno_11th_Editionr1.htm); the stop-line spacing follows the [MUTCD marking guidance](https://mutcd.fhwa.dot.gov/pdfs/11th_Edition/mutcd11thedition.pdf), and permissive left turns follow [FHWA's signal timing guidance](https://ops.fhwa.dot.gov/publications/fhwahop08024/chapter4.htm). Signal timing, speed-zone values, and placeholder dimensions are authored demonstration choices. This increment supplies road-control data and live guidance for free driving. AI compliance and other road users belong to Phases 8–9; violation scoring and exercises remain Phase 13 work. The car is not automatically stopped at signs, restricted by signals, or governed to zone limits.
+The controls use familiar [FHWA MUTCD sign, marking, and signal conventions](https://mutcd.fhwa.dot.gov/kno_11th_Editionr1.htm); the stop-line spacing follows the [MUTCD marking guidance](https://mutcd.fhwa.dot.gov/pdfs/11th_Edition/mutcd11thedition.pdf), and permissive left turns follow [FHWA's signal timing guidance](https://ops.fhwa.dot.gov/publications/fhwahop08024/chapter4.htm). Signal timing, speed-zone values, and placeholder dimensions are authored demonstration choices. Phase 8 adds AI compliance; pedestrians/cyclists remain Phase 9 work, and violation scoring and exercises remain Phase 13 work. The player's car is not automatically stopped at signs, restricted by signals, or governed to zone limits.
 
 Acceptance checks cover every lane and permitted turn path with a full sedan footprint in both generated driving-side orientations, turning radii above 5.7 m, connected routes, flush crossings, parking clearance, the selected US lane orientation, signs/stop lines/speed zones, signal phase boundaries and clearance, permissive left turns, rule metadata, front-bumper guidance, example spawns, physical sign impacts, and identical signal timing at 30/60/144 Hz. Existing driving, terrain, damage, and cockpit tests remain passing. Browser checks cover each example, manual approach/braking, signal and guidance agreement, settings pause/reset, and desktop/phone/landscape layouts.
+
+## Phase 8 — Vehicle traffic (first playable increment)
+
+- Placeholder sedans follow the shared US lanes and sampled turn paths on the same 120 Hz clock as the player and signals. Seeded, finite routes exclude the practice lot and test area, leaving those spaces free for maneuvers. Straight-road cruising is capped at 9 m/s (about 20 mph) or the local speed limit; turns use a 5 m/s cap. Authored acceleration/braking limits are 1.8/4.5 m/s².
+- Drivers look along their upcoming lane, turn, and exit for other sedan footprints and the player. A 2.5 m standstill gap and 1.6 s following headway govern braking. A stopped player or blocked exit can hold a queue; removing the obstruction lets it resume. Emergency distance clamps handle sudden player intrusion, so those stops can exceed the ordinary braking limit.
+- Junction entry is deliberately cautious: every AI driver pauses before entering, including at green signals and uncontrolled bends. Stop-controlled drivers dwell for at least 0.7 s, stopping their front bumper 0.4 m behind the stop bar. All-way stops respect arrival order and the driver on the right at simultaneous arrivals; a stable tie break resolves a complete four-way priority cycle. Stop/yield branches yield to the leading through-route vehicle; permissive left turns yield to the opposing leader. Cars waiting farther back do not block a left turn independently of their leader.
+- One AI vehicle reserves a junction at a time, retaining ownership until its rear clears the exit. Red/yellow deny new entry; already committed vehicles clear after the lights change. Drivers check exit space before admission and conservatively yield to a player inside or moving toward the junction. This serializes compatible movements and can produce long queues at Busy density; it is an initial predictable traffic model, not a complete human-driver model.
+- **Vehicle traffic** defaults to Light, with Off / Single / Light / Busy caps of 0 / 1 / 6 / 16. Seeded spawning checks an 18 m clearance from existing cars and the player and retries once per simulation second when space is unavailable. Route completion removes the car and its collider; ordinary traffic replenishes to the selected cap. Lowering density removes excess cars and reservations immediately. Reset restarts traffic and signals deterministically; repair preserves traffic. All traffic freezes during existing settings/focus/visibility/graphics interruptions.
+- The four **Traffic:** road examples reset the player in Park facing the encounter and install finite, repeatable fixtures. They display **Scenario vehicles** and do not replenish. Selecting a density returns to ordinary spawning; Reset or another road example exits the fixture (defaulting to Light). Re-select the same example to repeat it. Brake lamps, turn indicators, map markers, and all three existing mirror passes include traffic.
+- Traffic colliders are kinematic Rapier bodies. The player can collide with them and receive the existing damage feedback, tagged as `vehicle` impact material. AI cars keep their authored routes and cannot be pushed off them; AI suspension, crash response, lane changes, overtaking, horn response, and evasive recovery are deferred. Deliberate player collisions or parking across a junction can obstruct traffic; reset or turn traffic off to clear it.
+
+Acceptance checks cover finite route completion and pavement alignment, following/spacing behind a stationary player and release, stop-bar clearance, red/yellow entry and committed clearance, stop dwell and simultaneous arrival ordering, permissive left turns, through-route priority, player intrusion, blocked exits, safe spawning/removal/reset, and identical outcomes at 30/60/144 Hz. A ten-minute 16-car run checks sampled oriented footprints for collisions, at least eight completed routes, and continued progress for surviving cars over its final four minutes. The test reports fixed-step AI cost on the executing host; this does not establish a browser/device frame-rate guarantee. Desktop, phone, and compact landscape browser smoke checks cover density, fixtures, rendering, and control access. Hardware profiling remains future validation.
 
 ## Structure
 
@@ -175,6 +189,10 @@ Acceptance checks cover every lane and permitted turn path with a full sedan foo
 - `src/road-network.ts`: Shared streets, junctions, generated directional lanes/turn paths, crossings, and parking spaces.
 - `src/traffic-layout.ts`: Confirmed US profile, live lane graph, approaches, speed zones, signs, signal fixtures, and repeatable example spawns.
 - `src/traffic-rules.ts`: Fixed-step signal clock, movement-rule metadata, and upcoming-control guidance.
+- `src/vehicle-traffic.ts`: Seeded lane drivers, following/braking, junction priority/reservations, and density lifecycle.
+- `src/traffic-scenarios.ts`: Repeatable following, stop, left-turn, and through-priority fixtures.
+- `src/traffic-physics.ts`: Bounded traffic collider lifecycle in the player's Rapier world.
+- `src/traffic-visuals.ts`: Shared placeholder sedan geometry, brake lamps, and indicators.
 - `src/road-visuals.ts`: Shared road markings, signs, arrows, support posts, and signal lenses.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
@@ -183,6 +201,7 @@ Acceptance checks cover every lane and permitted turn path with a full sedan foo
 - `tests/driver-controls.test.mjs`: Explicit pedal/selector behavior, parking hold, input overlap/interruption, bindings, switch timing, repair/reset, and frame-rate consistency.
 - `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
+- `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/road-network.test.mjs`: Network connectivity, both driving sides, sedan/curb clearance, feasible turning radii, crossing openings, and parking geometry.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
@@ -261,7 +280,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Road markings, collision geometry, lane connections, and signal states agree. Every route and intersection can be driven manually without ambiguous or impossible geometry. Implemented checks and playable examples are described above.
 
-### Phase 8 — Vehicle traffic
+### Phase 8 — Vehicle traffic (first playable increment implemented)
 
 **Focus:** Add predictable AI drivers on the validated road network.
 
@@ -269,7 +288,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Introduce spawning, removal, and adjustable traffic density only after individual vehicles behave correctly.
 - Use repeatable traffic scenarios to diagnose collisions and deadlocks.
 
-**Testing checkpoint:** Vehicles maintain spacing, yield as intended, and complete routes without routine collisions or deadlocks. Test player interference and performance as traffic density increases.
+**Testing checkpoint:** Vehicles maintain spacing, yield as intended, and complete routes without routine collisions or deadlocks. Test player interference and performance as traffic density increases. The first increment's conservative junction behavior, repeatable encounters, sustained-run acceptance checks, and profiling limitations are described above.
 
 ### Phase 9 — Pedestrians and cyclists
 

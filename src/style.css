@@ -228,6 +228,8 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
 #road-context { display: block; margin-bottom: 7px; font-size: 10px; }
 .road-panel label { display: block; font-size: 9px; margin-bottom: 4px; }
 .road-panel select { width: 100%; padding: 6px; border: 1px solid #98aa94; border-radius: 5px; color: #284b3d; background: #f9faf5; font: inherit; }
+.traffic-options { margin-top: 8px; }
+#traffic-status { margin: 5px 0 0; font-size: 8px; }
 @media (max-width: 1100px) { .road-panel { top: 243px; left: 24px; width: 235px; } .location { display: none; } }
 @media (max-width: 720px) { .road-panel { top: 382px; } }
 @media (max-width: 600px) {
@@ -250,7 +252,7 @@ button:focus-visible { outline: 2px solid #547954; outline-offset: 5px; }
 
 @media (max-height: 550px) and (min-width: 601px) {
   .damage-panel { top: 75px; bottom: auto; width: 210px; }
-  .road-panel { top: 225px; padding: 8px; }
+  .road-panel { top: 225px; padding: 8px; max-height: max(60px, calc(100dvh - 325px)); overflow-y: auto; }
   .road-panel label, #road-jurisdiction { display: none; }
   .road-panel p { margin-bottom: 4px; }
   .road-panel select { padding: 4px; }

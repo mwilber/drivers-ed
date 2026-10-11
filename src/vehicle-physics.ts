@@ -73,6 +73,11 @@ export class VehiclePhysics {
     this.colliderMaterials.set(collider.handle, surface);
   }
 
+  setColliderMaterial(handle: number, material?: string): void {
+    if (material) this.colliderMaterials.set(handle, material);
+    else this.colliderMaterials.delete(handle);
+  }
+
   reset(spawn: Spawn = this.options.spawn ?? createCar()): void {
     this.damage.repair();
     this.eventQueue.clear();

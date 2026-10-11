@@ -4,6 +4,9 @@ import { createCar, indicatorLit, type GearSelection } from './simulation.ts';
 import { ACTIONS, ACTION_LABELS, DriverInput, keyLabel, type Action } from './driver-input.ts';
 import { createVehiclePhysics, type Spawn, type VehiclePhysics } from './vehicle-physics.ts';
 import { TrafficSignals, upcomingControl, controlGuidance } from './traffic-rules.ts';
+import { VehicleTraffic, type TrafficDensity } from './vehicle-traffic.ts';
+import { TrafficPhysics } from './traffic-physics.ts';
+import { TRAFFIC_SCENARIOS, loadTrafficScenario, type TrafficScenario } from './traffic-scenarios.ts';
 import { ROAD_RULES, ROAD_EXAMPLES, APPROACHES, speedZoneAt } from './traffic-layout.ts';
 import { SimulationClock } from './simulation-clock.ts';
 import { DAMAGE_PANELS } from './vehicle-damage.ts';
@@ -26,6 +29,9 @@ let car = createCar();
 let physics: VehiclePhysics | undefined;
 const clock = new SimulationClock();
 const trafficSignals = new TrafficSignals();
+const traffic = new VehicleTraffic();
+let trafficPhysics: TrafficPhysics | undefined;
+const trafficDensity = document.querySelector<HTMLSelectElement>('#traffic-density')!;
 const roadContext = document.querySelector<HTMLElement>('#road-context')!;
 const roadControl = document.querySelector<HTMLElement>('#road-control')!;
 const driverInput = new DriverInput();
@@ -64,8 +70,12 @@ function interrupt() {
 }
 function reset(spawn?: Spawn) {
   if (!physics) return;
+  trafficPhysics?.clear();
   physics.reset(spawn);
   trafficSignals.reset();
+  if (trafficDensity.value === 'scenario') { traffic.density = 'light'; trafficDensity.value = 'light'; }
+  traffic.reset(car);
+  trafficPhysics?.sync(traffic.cars);
   clock.reset();
   driverInput.reset();
   clearInput();
@@ -172,7 +182,21 @@ document.querySelector('#road-example')!.addEventListener('change', event => {
   const select = event.target as HTMLSelectElement;
   const spawn = ROAD_EXAMPLES[select.value as keyof typeof ROAD_EXAMPLES];
   if (spawn) reset(spawn);
+  const scenario = TRAFFIC_SCENARIOS[select.value as TrafficScenario];
+  if (scenario) {
+    reset(scenario.spawn);
+    trafficPhysics?.clear();
+    loadTrafficScenario(traffic, select.value as TrafficScenario);
+    trafficDensity.value = 'scenario';
+    trafficPhysics?.sync(traffic.cars);
+    showNotice('Repeatable traffic scenario ready. Select Drive, or watch the encounter.');
+  }
   select.value = ''; canvas.focus();
+});
+trafficDensity.addEventListener('change', () => {
+  traffic.setDensity(trafficDensity.value as TrafficDensity, car);
+  trafficPhysics?.sync(traffic.cars);
+  canvas.focus();
 });
 repairButton.addEventListener('click', () => {
   physics?.repair();
@@ -325,6 +349,10 @@ function drawMap() {
   c.fillText('15 MPH', -50, 160);
   c.fillText('25 MPH', -50, 4);
   c.fillText('P', 107, 118);
+  for (const vehicle of traffic.cars) {
+    c.save(); c.translate(vehicle.x, vehicle.z); c.rotate(-vehicle.heading);
+    c.fillStyle = '#577a96'; c.fillRect(-1.8, -3, 3.6, 6); c.restore();
+  }
   c.translate(car.x, car.z);
   c.rotate(-car.heading);
   c.fillStyle = '#264d3b22';
@@ -347,6 +375,9 @@ async function start() {
   physics = await createVehiclePhysics({ explicitControls: true });
   physics.damage.handlingEnabled = damageHandling.checked;
   car = physics.state;
+  trafficPhysics = new TrafficPhysics(physics);
+  traffic.reset(car);
+  trafficPhysics.sync(traffic.cars);
   clearInput();
   document.querySelector('#road-jurisdiction')!.textContent = `${ROAD_RULES.jurisdiction} · keep right`;
   showNotice(`Ready. Select Drive (${driverInput.bindings.drive.map(keyLabel).join(' / ')}), then accelerate (${driverInput.bindings.forward.map(keyLabel).join(' / ')}).`);
@@ -367,7 +398,13 @@ async function start() {
     if (document.hidden || suspended || windowBlurred || lostContext) { clock.reset(); return; }
     const input = driverInput.snapshot();
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
-    clock.advance(dt, step => { physics!.step(input, step); trafficSignals.step(); });
+    clock.advance(dt, step => {
+      traffic.step(trafficSignals.seconds, car);
+      trafficPhysics!.sync(traffic.cars);
+      physics!.step(input, step);
+      trafficSignals.step();
+    });
+    document.querySelector('#traffic-status')!.textContent = `${traffic.cars.length} vehicles · ${traffic.completed} routes completed`;
     const damage = physics!.damage;
     const impacts = damage.drainEvents().filter(event => event.kind === 'impact');
     if (impacts.length) {
@@ -402,7 +439,7 @@ async function start() {
     const zone = isOnRoad(car.x, car.z) ? speedZoneAt(car) : undefined;
     roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
     roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
-    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds);
+    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars);
     drawMap();
   }
   requestAnimationFrame(frame);

@@ -5,6 +5,8 @@ import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { indicatorLit, type CarState } from './simulation.ts';
 import type { VehiclePhysics } from './vehicle-physics.ts';
 import { CAR, SUSPENSION } from './vehicle-config.ts';
+import { createTrafficVisuals } from './traffic-visuals.ts';
+import type { TrafficCar } from './vehicle-traffic.ts';
 import { MIRRORS, MIRROR_BUDGET, MirrorSchedule, mirrorGeometry, placeDriverCamera, placeMirrorCamera, type ViewSettings } from './cockpit.ts';
 import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
 
@@ -77,6 +79,7 @@ export function createScene(canvas: HTMLCanvasElement) {
     scene.add(label);
   }
   const roadVisuals = createRoadVisuals(scene);
+  const trafficVisuals = createTrafficVisuals(scene);
 
   for (const house of HOUSES) {
     // Plain massing only: walls and a pitched roof, without doors or windows.
@@ -198,8 +201,9 @@ export function createScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener('resize', resize);
   return {
-    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0) {
+    render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = []) {
       roadVisuals.update(trafficTime);
+      trafficVisuals.update(traffic, trafficTime);
       damageVisuals.update(physics.damage);
       for (const lens of headlightMaterials) lens.emissiveIntensity = state.headlights ? 2 : 0;
       for (const beam of headlightBeams) beam.intensity = state.headlights ? 900 : 0;
