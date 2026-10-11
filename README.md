@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 9's first increment adds crossing pedestrians, vehicle yielding, repeatable encounters, and finite-mass pedestrian collision responses. Phase 8b's dynamic traffic and mutual sedan damage remain available on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 10's first increment adds configurable day, dusk, and night lighting, shadowed headlights, and visible traffic lamps. Crossing pedestrians, vehicle yielding, repeatable encounters, and finite-mass collisions remain available on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed pedestrian crossing example in Phase 9](docs/screenshots/app-phase-9.jpg)
+![Drivers Ed at night with headlights in Phase 10](docs/screenshots/app-phase-10.jpg)
 
 ## Run locally
 
@@ -42,7 +42,7 @@ Use a browser with WebGL 2, WebAssembly, and hardware acceleration enabled. All 
 | J / L (hold) | Check left / right shoulder; release to face forward |
 | K (hold) | Look back through the rear window; release to face forward |
 | Shoulder / Back buttons (hold) | Pointer, touch, or focused Space/Enter head checks |
-| View settings button | Adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
+| View & lighting button | Select Day / Dusk / Night; adjust seating, field of view, head-turn smoothing, chassis motion, and mirror quality |
 | Try a road example selector | Reset in Park before signals, a stop/yield junction, or parallel parking; restart the signal cycle |
 | Traffic examples in the road example selector | Repeat following/signals, simultaneous stops, a permissive left turn, a yield encounter, or a collision with fixed traffic starts |
 | Pedestrian examples in the road example selector | Repeat crossing/yielding, partial occlusion, or failure to yield with fixed starts |
@@ -129,7 +129,7 @@ This is a game damage model, not crash deformation or a real vehicle safety/cali
 
 - Explicit P/R/N/D selection retains automatic forward shifting. The accelerator follows the selected gear; the service brake never selects reverse. Brake overlap, unsafe moving selections, Neutral coasting, and the engagement delay have repeatable tests.
 - Park and the toggled parking brake use simplified wheel braking on all four wheels. The parking brake cuts propulsion immediately and remains effective with handling damage. Both hold the existing 1:10 test slope within 15 cm over eight seconds. This increment does not model a transmission pawl or a rear-axle handbrake/drifting system.
-- Left/right indicators and hazards blink on a one-second simulation-time cycle (half on, half off), visible on placeholder front/rear lamps and dashboard arrows. Indicators cancel when toggled again or replaced by the other side; automatic cancellation is deferred. Headlights switch emissive lenses and two forward spotlight beams; the world remains daytime until Phase 10.
+- Left/right indicators and hazards blink on a one-second simulation-time cycle (half on, half off), visible on placeholder front/rear lamps and dashboard arrows. Indicators cancel when toggled again or replaced by the other side; automatic cancellation is deferred. Headlights switch emissive lenses and two forward spotlight beams; Phase 10 adds dusk and night lighting with shadowed beams.
 - The horn has a momentary held state and visible dashboard feedback. Sound is deferred to the planned driving audio phase, alongside indicator clicks and other driving sounds.
 - Keyboard and pointer sources are tracked independently. Key repeat cannot repeatedly toggle a switch; opposing steering cancels. Blur, visibility, settings, form focus, pointer cancellation, and lost capture clear the appropriate held controls. Switches persist across ordinary interruptions. No gamepad polling is introduced until analog controller support is requested.
 - The keyboard dialog lists all bindings, pauses the simulation, rejects conflicts and reserved keys, persists versioned preferences locally, and restores defaults. Reset clears operating controls; repair preserves them.
@@ -141,7 +141,7 @@ Acceptance checks cover safe forward/reverse transitions, Park/Neutral propulsio
 - The driver remains in the left seat, with adjustable eye height (1.12–1.38 m), distance back (0.18–0.55 m), and vertical field of view (55–90°, default 68°). The bounds keep the eye inside the placeholder cabin. The default seating position preserves the earlier forward view and visible hood for lane/parking judgment.
 - Hold **J/L** for a 117° left/right shoulder check, or **K** for a rear-window check. Release to face forward. Opposing shoulder inputs cancel; Back takes priority, with a held shoulder choosing which way to turn. Head turns are independent of steering and gear. All three controls can be remapped, or held using the on-screen pointer/touch buttons. Focus loss, settings, reset, pointer cancellation, and lost capture release head inputs along with existing driving controls.
 - A labeled mirror strip displays an interior rearview and left/right side views from car-local mirror positions. Views are horizontally reflected, follow the physical chassis, and remain rear-facing during head checks. Side views point 17° outward and use a wider FOV than the interior mirror. They overlap the view behind the car, but adjacent blind spots require shoulder checks. The player's shell is omitted from mirror passes; these are simplified placeholder mirrors without glass optics or cabin/body occlusion.
-- **View settings** can disable chassis pitch/roll for a level horizon, or disable animated head turns for instant checks. The seat still follows the physical car's position; no extra shake is introduced. Preferences save locally with validation and safe defaults for corrupt/older data. Reset preserves view preferences and clears the current head check. Opening either settings dialog pauses driving and releases held inputs.
+- **View & lighting** can disable chassis pitch/roll for a level horizon, or disable animated head turns for instant checks. The seat still follows the physical car's position; no extra shake is introduced. Preferences save locally with validation and safe defaults for corrupt/older data. Reset preserves view preferences and clears the current head check. Opening either settings dialog pauses driving and releases held inputs.
 - The compact instrument cluster retains MPH and P/R/N/D/automatic ratio, and adds live engine RPM, throttle, and service-brake force meters. Park uses the service-brake force meter as part of its simplified wheel hold; the separate parking brake retains its existing switch feedback. Placeholder cockpit geometry remains in place.
 
 The initial rendering budget caps mirrors at **three 512 × 256 targets, up to 30 batches/second** (11.8 million mirror pixels/second), with **Low: 256 × 128 at up to 15 Hz**, or **Off**. Each batch renders one pass per mirror, with a 220 m far plane, no multisampling/mipmaps, and reused main-view shadows. Slow frames and resume never trigger catch-up batches. The small screen overlay reuses the latest textures between batches. This caps authored rendering work; it is not a measured GPU/frame-time guarantee across devices. Device profiling and a supported hardware frame-rate target remain to be agreed.
@@ -205,11 +205,36 @@ Acceptance checks cover safe gaps and signal clearance, upright repeated crossin
 
 This is a simplified single-body pedestrian model, not an articulated ragdoll or validated human biomechanics. Gap acceptance uses nearby physical poses without modeling attention, sightline perception, or future turn intent; AI yields conservatively. Cyclists, bicycles, overtaking interactions, and rider/bicycle crash behavior are the separate next increment within Phase 9.
 
+## Phase 10 — Lighting (first playable increment)
+
+- **View & lighting → Lighting** selects **Day**, **Dusk**, or **Night**. Closing the dialog resumes driving in the chosen condition. The choice saves separately from cockpit preferences, with validated defaults for missing, corrupt, or unsupported data. **Restore defaults** restores daytime and the original cockpit view. Reset, Test area, and all road/traffic/pedestrian examples preserve the lighting choice; they retain the existing reset behavior of switching headlights off. The driver panel identifies the condition and reminds the driver to switch on headlights at dusk/night.
+- Day keeps the original sky, fog distances, and sun/ambient lighting. Dusk lowers the sun and ambient illumination; night uses a dim blue ambient/moonlight baseline so nearby silhouettes and mirrors remain usable. There is no automatic time progression. All three presets retain identical dry-road grip, braking, AI decisions, and pedestrian behavior.
+- The player's two headlights illuminate the road and markings, follow the complete chassis pose, and cast shadows behind obstacles. Their authored range is 70 m; cone checks cover both lane edges 10–40 m ahead. They are a simplified symmetric beam, without a real low-beam cutoff or optical calibration. Road arrows/yield triangles now respond to lighting, and sign textures use sRGB color so dark lettering remains distinguishable under headlights. The cabin roof also responds to scene lighting. Player rear lamps illuminate with headlights; service braking makes them brighter.
+- Traffic front and tail lenses illuminate automatically at dusk/night, with brighter brake lamps and existing indicators. These emissive placeholders are visible in the cockpit and mirrors; AI cars do not project additional headlight beams. The player's light rig stays outside its hidden mirror shell, preserving illumination in every mirror pass. Standard/Low/Off mirror options retain their existing update/pixel budgets.
+- Lighting has a fixed budget: one 2048 × 2048 sun shadow map during day/dusk, and at most two 512 × 512 headlight shadow maps when headlights are on. Night disables sun shadows. Mirror passes reuse main-view shadows rather than rebuilding them; condition changes reuse lights and materials. No third-party libraries were added.
+
+Acceptance checks cover saved-condition validation, exact restoration of daytime lighting, forward cone coverage through chassis yaw/pitch/roll, headlight on/off, light visibility when the player's mirror shell is hidden, bounded light/shadow resources, traffic brake/tail distinction and pooled-slot reuse. A repeatable **30 mph stop remains 12.32 m** in every lighting preset, with identical vehicle state at **30/60/144 Hz**. All **119 tests** pass, including the prior 113 driving, traffic, pedestrian, and damage checks. The production build passes with the existing Rapier bundle-size advisory. Browser checks cover headlights on/off, readable lane edges/signs and rear scenery, saved lighting across reload, restore defaults, reset, mirror quality, and **390 × 844** / **844 × 390** layouts.
+
+Initial steady desktop measurements in the Codex in-app browser use 300 frames per condition, the default seat, a parked player at the neighborhood start, Busy traffic, three pedestrians, headlights on, and Standard mirrors:
+
+| Lighting | Observed frame rate | Mean frame CPU | p95 frame CPU |
+| --- | --- | --- | --- |
+| Day | 75 FPS | 5.20 ms | 7.60 ms |
+| Dusk | 74 FPS | 5.80 ms | 8.60 ms |
+| Night | 74 FPS | 4.64 ms | 6.80 ms |
+
+These are development-host samples, not GPU completion timings or a supported-device frame-rate guarantee; shader compilation, resize, and mode changes can cause slower frames. To reproduce local measurements, open the Vite URL with **`?profile=1`** and read the browser console after 300 uninterrupted frames. Profiling runs only in development, resets its sample on pauses or condition/settings changes, and sends no telemetry. A hardware/device target and broader sustained driving/GPU profiling remain to be agreed.
+
+This increment follows the roadmap's dusk/night-first sequence. Rain, wet-road grip, reduced weather visibility, windshield rain, and wipers remain the next Phase 10 increment. Cyclists remain deferred within Phase 9; audio remains Phase 11.
+
 ## Structure
 
 - `src/simulation.ts`: Gear-selection interlocks, switch timing, shared drivetrain forces, and the Phase 2 planar reference model, in metres/seconds/radians.
 - `src/driver-input.ts`: Independent held input sources, operating switches, binding validation, and versioned preferences.
 - `src/cockpit.ts`: Validated view preferences, controlled head movement, driver/mirror camera placement, reflection geometry, and mirror update budget.
+- `src/driving-conditions.ts`: Validated saved lighting presets and condition/headlight guidance; dry-road baseline remains unchanged.
+- `src/driving-lighting.ts`: Shared scene lighting, chassis-following headlights, and fixed shadow-map budget.
+- `src/render-profile.ts`: Opt-in local development frame-rate and CPU measurements.
 - `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
 - `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and future audio events.
 - `src/damage-visuals.ts`: Independent placeholder body panels, dents/scratches, and restoration of original geometry and paint.
@@ -232,6 +257,7 @@ This is a simplified single-body pedestrian model, not an articulated ragdoll or
 - `src/style.css`: Responsive interface and touch controls.
 - `tests/driver-controls.test.mjs`: Explicit pedal/selector behavior, parking hold, input overlap/interruption, bindings, switch timing, repair/reset, and frame-rate consistency.
 - `tests/cockpit.test.mjs`: Sightlines, mirror direction/reflection, comfort orientation, head movement and input cleanup, preference/binding migration, and rendering-work limits.
+- `tests/driving-conditions.test.mjs`: Lighting preferences, baseline restoration, headlight coverage and mirror visibility, resource limits, traffic lamps, and unchanged dry-road stops across frame rates.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
@@ -347,7 +373,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Pedestrians cross only in safe gaps, AI stops before the crossing and resumes after clearance, and turning traffic yields too. Repeatable partial occlusion and player/AI impacts exercise finite mass, displacement/toppling, low/high and glancing impacts, resting-contact safeguards, high-speed CCD, retirement/reset/disable cleanup, and identical state at 30/60/144 Hz. Earlier driving and traffic checks remain passing. Check cockpit/mirror visibility and measure Busy traffic with pedestrians.
 
-### Phase 10 — Lighting, weather, and surface conditions
+### Phase 10 — Lighting, weather, and surface conditions (first lighting increment implemented)
 
 **Focus:** Vary driving conditions after dry-road behavior is stable.
 
@@ -355,7 +381,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 - Add rain, wet-road grip, and reduced visibility one condition at a time; add wipers when rain affects the windshield.
 - Keep each condition configurable so it can be compared against the dry daytime baseline.
 
-**Testing checkpoint:** Changes in visibility and stopping distance are consistent and measurable. Lighting, mirrors, and weather effects remain usable at the target frame rate.
+**Testing checkpoint:** Changes in visibility and stopping distance are consistent and measurable. Lighting, mirrors, and weather effects remain usable at the target frame rate. The first increment's lighting, unchanged dry-road stopping checks, and initial browser profiling are described above; rain, wet grip, windshield effects/wipers, and broader device validation remain pending.
 
 ### Phase 11 — Driving audio
 

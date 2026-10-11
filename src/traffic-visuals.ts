@@ -3,6 +3,7 @@ import { CAR } from './vehicle-config.ts';
 import { ROAD_HEIGHT } from './world-layout.ts';
 import type { TrafficCar } from './vehicle-traffic.ts';
 import { createDamageVisuals } from './damage-visuals.ts';
+import type { TimeOfDay } from './driving-conditions.ts';
 
 /** Shared geometry/materials and a bounded pool, also visible in the existing mirror passes. */
 export function createTrafficVisuals(scene: THREE.Scene) {
@@ -14,8 +15,11 @@ export function createTrafficVisuals(scene: THREE.Scene) {
   const tire = new THREE.MeshStandardMaterial({ color: 0x242b2c });
   const brakeOn = new THREE.MeshStandardMaterial({ color: 0xb32420, emissive: 0xff2410, emissiveIntensity: 2 });
   const brakeOff = new THREE.MeshStandardMaterial({ color: 0x651b1a });
+  const tailOn = new THREE.MeshStandardMaterial({ color: 0x651b1a, emissive: 0xff2410, emissiveIntensity: 0.6 });
+  const headOn = new THREE.MeshStandardMaterial({ color: 0xd8dfd2, emissive: 0xfff4ce, emissiveIntensity: 2 });
+  const headOff = new THREE.MeshStandardMaterial({ color: 0xd8dfd2 });
   const amber = new THREE.MeshStandardMaterial({ color: 0xe59c27, emissive: 0xe59c27, emissiveIntensity: 2 });
-  const groups: { group: THREE.Group; brakes: THREE.Mesh[]; signals: THREE.Mesh[]; damage: ReturnType<typeof createDamageVisuals> }[] = [];
+  const groups: { group: THREE.Group; brakes: THREE.Mesh[]; headlights: THREE.Mesh[]; signals: THREE.Mesh[]; damage: ReturnType<typeof createDamageVisuals> }[] = [];
   function create() {
     const group = new THREE.Group();
     const damage = createDamageVisuals(paints[groups.length % paints.length]);
@@ -24,23 +28,25 @@ export function createTrafficVisuals(scene: THREE.Scene) {
     for (const x of [-0.86, 0.86]) for (const z of [-CAR.wheelbase / 2, CAR.wheelbase / 2]) {
       const wheel = new THREE.Mesh(wheelGeometry, tire); wheel.rotation.z = Math.PI / 2; wheel.position.set(x, CAR.tireRadius, z); group.add(wheel);
     }
-    const brakes: THREE.Mesh[] = [], signals: THREE.Mesh[] = [];
+    const brakes: THREE.Mesh[] = [], headlights: THREE.Mesh[] = [], signals: THREE.Mesh[] = [];
     for (const x of [-0.65, 0.65]) {
+      const headlight = new THREE.Mesh(lampGeometry, headOff); headlight.position.set(x, 0.7, -CAR.length / 2 - 0.01); group.add(headlight); headlights.push(headlight);
       const brake = new THREE.Mesh(lampGeometry, brakeOff); brake.position.set(x, 0.7, CAR.length / 2 + 0.01); group.add(brake); brakes.push(brake);
       for (const z of [-CAR.length / 2 - 0.02, CAR.length / 2 + 0.02]) {
         const signal = new THREE.Mesh(lampGeometry, amber); signal.position.set(Math.sign(x) * 0.84, 0.8, z); group.add(signal); signals.push(signal);
       }
     }
-    scene.add(group); const result = { group, brakes, signals, damage }; groups.push(result); return result;
+    scene.add(group); const result = { group, brakes, headlights, signals, damage }; groups.push(result); return result;
   }
   return {
-    update(cars: readonly TrafficCar[], seconds: number) {
+    update(cars: readonly TrafficCar[], seconds: number, timeOfDay: TimeOfDay = 'day') {
       for (const entry of groups) entry.group.visible = false;
       cars.forEach((car, i) => {
         const entry = groups[i] ?? create(); entry.group.visible = true;
         entry.group.position.set(car.x, ROAD_HEIGHT, car.z); entry.group.rotation.y = car.heading;
         entry.damage.update(car.damage);
-        for (const brake of entry.brakes) brake.material = car.braking ? brakeOn : brakeOff;
+        for (const headlight of entry.headlights) headlight.material = timeOfDay === 'day' ? headOff : headOn;
+        for (const brake of entry.brakes) brake.material = car.braking ? brakeOn : timeOfDay === 'day' ? brakeOff : tailOn;
         for (const signal of entry.signals) signal.visible = seconds % 1 < 0.5 && (car.indicator === 'left' ? signal.position.x < 0 : car.indicator === 'right' && signal.position.x > 0);
       });
     },

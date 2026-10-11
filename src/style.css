@@ -2,6 +2,9 @@
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: #c6dce3; }
+#app[data-lighting="dusk"] .topbar, #app[data-lighting="night"] .topbar { color: #edf1e7; background: linear-gradient(#101b2dcc, #101b2d00); }
+#app[data-lighting="dusk"] .location, #app[data-lighting="night"] .location { color: #edf1e7; text-shadow: 0 1px 8px #101b2d; }
+#app[data-lighting="night"] .topbar .live-dot { background: #a6c396; }
 button { font: inherit; touch-action: manipulation; }
 #world { display: block; width: 100%; height: 100%; }
 .topbar { position: absolute; inset: 0 0 auto; padding: 27px 38px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(#f3f4eebf, #f3f4ee00); pointer-events: none; }

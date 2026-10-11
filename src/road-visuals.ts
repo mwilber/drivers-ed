@@ -45,7 +45,10 @@ export function createRoadVisuals(scene: THREE.Scene) {
           x - u.x * 0.3 + right.x * 0.3, ROAD_HEIGHT + 0.012, z - u.z * 0.3 + right.z * 0.3,
           x - u.x * 0.3 - right.x * 0.3, ROAD_HEIGHT + 0.012, z - u.z * 0.3 - right.z * 0.3,
         ], 3));
-        scene.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xf3f1df, side: THREE.DoubleSide })));
+        geometry.computeVertexNormals();
+        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xf3f1df, roughness: 1, side: THREE.DoubleSide }));
+        mesh.receiveShadow = true;
+        scene.add(mesh);
       }
     }
   }
@@ -91,7 +94,7 @@ export function createRoadVisuals(scene: THREE.Scene) {
         for (const [i, text] of ['NO', 'TURN', 'ON RED'].entries()) c.fillText(text, 256, 120 + i * 136);
       }
     }
-    const texture = new THREE.CanvasTexture(canvas); textures.set(key, texture); return texture;
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; textures.set(key, texture); return texture;
   }
   function signBoard(texture: THREE.CanvasTexture, width: number, height: number, sign: RoadSign, y: number) {
     const face = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshStandardMaterial({ map: texture, transparent: true, alphaTest: 0.1, roughness: 0.9, emissiveMap: texture, emissive: 0xffffff, emissiveIntensity: 0.15 }));
@@ -108,7 +111,8 @@ export function createRoadVisuals(scene: THREE.Scene) {
       const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
       const c = canvas.getContext('2d')!; c.fillStyle = '#fff8ee'; c.fillRect(0, 0, 512, 128);
       c.fillStyle = '#202726'; c.font = 'bold 80px sans-serif'; c.textAlign = 'center'; c.fillText('ALL WAY', 256, 96);
-      signBoard(new THREE.CanvasTexture(canvas), 0.8, 0.2, sign, 1.97);
+      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+      signBoard(texture, 0.8, 0.2, sign, 1.97);
     }
   }
   const arrowTextures = new Map<string, THREE.CanvasTexture>();
@@ -129,9 +133,11 @@ export function createRoadVisuals(scene: THREE.Scene) {
         c.beginPath(); c.moveTo(128, 160); c.quadraticCurveTo(128, 125, x, 125); c.stroke();
         head(x, 125, turn === 'left' ? -Math.PI / 2 : Math.PI / 2);
       }
-      arrowTextures.set(key, new THREE.CanvasTexture(canvas));
+      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+      arrowTextures.set(key, texture);
     }
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 3.8), new THREE.MeshBasicMaterial({ map: arrowTextures.get(key), transparent: true, depthWrite: false }));
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 3.8), new THREE.MeshStandardMaterial({ map: arrowTextures.get(key), transparent: true, depthWrite: false, roughness: 1 }));
+    mesh.receiveShadow = true;
     mesh.rotation.set(-Math.PI / 2, 0, Math.atan2(-arrow.direction.x, -arrow.direction.z));
     mesh.position.set(arrow.x, ROAD_HEIGHT + 0.012, arrow.z); scene.add(mesh);
   }

@@ -13,6 +13,8 @@ import { ROAD_RULES, ROAD_EXAMPLES, APPROACHES, speedZoneAt } from './traffic-la
 import { SimulationClock } from './simulation-clock.ts';
 import { DAMAGE_PANELS } from './vehicle-damage.ts';
 import { DEFAULT_VIEW, HeadLook, loadView, serializeView, type ViewSettings } from './cockpit.ts';
+import { loadConditions, serializeConditions, lightingGuidance, type DrivingConditions } from './driving-conditions.ts';
+import { RenderProfile } from './render-profile.ts';
 import { HOUSES, isOnRoad, PARKING_LOT, PARKING_MARKINGS, PAVED_SURFACES, TEST_AREA, TEST_CURB, TEST_RAMP, TREES, WORLD_BOUNDS } from './world-layout.ts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#world')!;
@@ -43,6 +45,12 @@ const headLook = new HeadLook();
 const viewStorageKey = 'drivers-ed.view.v1';
 let view: ViewSettings = { ...DEFAULT_VIEW };
 try { view = loadView(localStorage.getItem(viewStorageKey)); } catch { /* Session defaults work without storage. */ }
+const conditionsStorageKey = 'drivers-ed.conditions.v1';
+let conditions: DrivingConditions = loadConditions(null);
+try { conditions = loadConditions(localStorage.getItem(conditionsStorageKey)); } catch { /* Daytime works without storage. */ }
+const lightingSelect = document.querySelector<HTMLSelectElement>('#conditions-timeOfDay')!;
+lightingSelect.value = conditions.timeOfDay;
+document.querySelector<HTMLElement>('#app')!.dataset.lighting = conditions.timeOfDay;
 const bindingStorageKey = 'drivers-ed.bindings.v1';
 try { driverInput.load(localStorage.getItem(bindingStorageKey)); } catch { /* Storage may be unavailable. */ }
 const settings = document.querySelector<HTMLDialogElement>('#bindings-dialog')!;
@@ -127,6 +135,19 @@ function renderViewSettings() {
   document.querySelector<HTMLSelectElement>('#view-mirrors')!.value = view.mirrors;
 }
 renderViewSettings();
+function saveConditions() {
+  lightingSelect.value = conditions.timeOfDay;
+  document.querySelector<HTMLElement>('#app')!.dataset.lighting = conditions.timeOfDay;
+  const message = document.querySelector('#conditions-message')!;
+  try {
+    localStorage.setItem(conditionsStorageKey, serializeConditions(conditions));
+    message.textContent = 'Lighting saved. Return to driving to see this condition.';
+  } catch { message.textContent = 'Lighting applies for this session; browser storage is unavailable.'; }
+}
+lightingSelect.addEventListener('change', () => {
+  conditions = loadConditions(serializeConditions({ timeOfDay: lightingSelect.value as DrivingConditions['timeOfDay'] }));
+  saveConditions();
+});
 function saveView() {
   try { localStorage.setItem(viewStorageKey, serializeView(view)); viewMessage.textContent = 'View preferences saved.'; }
   catch { viewMessage.textContent = 'Preferences apply for this session; browser storage is unavailable.'; }
@@ -155,8 +176,10 @@ document.querySelector('#view-mirrors')!.addEventListener('change', event => {
 });
 document.querySelector('#default-view')!.addEventListener('click', () => {
   view = { ...DEFAULT_VIEW };
+  conditions = loadConditions(null);
   renderViewSettings();
   saveView();
+  saveConditions();
 });
 document.querySelector('#close-view')!.addEventListener('click', () => viewDialog.close());
 viewDialog.addEventListener('close', () => {
@@ -325,6 +348,9 @@ function updateControlDisplay() {
   const hornText = car.horn ? 'HORN ACTIVE' : 'Horn ready · sound in phase 11';
   if (hornState.textContent !== hornText) hornState.textContent = hornText;
   document.querySelector('#switch-state')!.textContent = `${car.parkingBrake ? 'Parking brake ON' : 'Parking brake OFF'} · Lights ${car.headlights ? 'ON' : 'OFF'}`;
+  const conditionStatus = document.querySelector('#conditions-status')!;
+  const guidance = lightingGuidance(conditions.timeOfDay, car.headlights);
+  if (conditionStatus.textContent !== guidance) conditionStatus.textContent = guidance;
   const look = driverInput.lookSnapshot();
   for (const button of document.querySelectorAll<HTMLElement>('.look-controls [data-drive]')) {
     const active = button.dataset.drive === 'lookLeft' ? look.left : button.dataset.drive === 'lookRight' ? look.right : look.back;
@@ -412,6 +438,7 @@ async function start() {
   let lostContext = false;
   let damageRevision = -1;
   let handlingEnabled = damageHandling.checked;
+  const profile = import.meta.env.DEV && new URLSearchParams(location.search).get('profile') === '1' ? new RenderProfile() : undefined;
   canvas.addEventListener('webglcontextlost', event => {
     event.preventDefault();
     lostContext = true;
@@ -420,9 +447,11 @@ async function start() {
   });
   function frame(time: number) {
     requestAnimationFrame(frame);
+    const frameStart = performance.now();
+    const intervalMs = time - lastTime;
     const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
-    if (document.hidden || suspended || windowBlurred || lostContext) { clock.reset(); return; }
+    if (document.hidden || suspended || windowBlurred || lostContext) { clock.reset(); profile?.pause(); return; }
     const input = driverInput.snapshot();
     headLook.update(driverInput.lookSnapshot(), dt, view.smoothLook);
     clock.advance(dt, step => {
@@ -474,8 +503,9 @@ async function start() {
     const zone = isOnRoad(car.x, car.z) ? speedZoneAt(car) : undefined;
     roadContext.textContent = zone ? `${zone.mph} MPH LIMIT · ${zone.name}` : 'Off road · return to a street';
     roadControl.textContent = controlGuidance(upcomingControl(car, car.heading), trafficSignals);
-    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people);
+    scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay);
     drawMap();
+    profile?.record(`${conditions.timeOfDay}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}`, intervalMs, performance.now() - frameStart);
   }
   requestAnimationFrame(frame);
 }
