@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createSceneryVisuals, createAsphaltTexture } from './scenery-visuals.ts';
 import { createRoadVisuals } from './road-visuals.ts';
 import { createDamageVisuals } from './damage-visuals.ts';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
@@ -17,7 +18,7 @@ import { createWeatherVisuals } from './weather-visuals.ts';
 import { WindshieldRain } from './windshield-rain.ts';
 import type { Pedestrian } from './pedestrians.ts';
 import { MIRRORS, MIRROR_BUDGET, MirrorSchedule, mirrorGeometry, placeDriverCamera, placeMirrorCamera, type ViewSettings } from './cockpit.ts';
-import { BOUNDARY_OBSTACLES, DRIVEWAYS, HOUSES, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP, TREES } from './world-layout.ts';
+import { BOUNDARY_OBSTACLES, DRIVEWAYS, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP } from './world-layout.ts';
 
 const materials = new Map<number, THREE.MeshStandardMaterial>();
 function material(color: number): THREE.MeshStandardMaterial {
@@ -52,7 +53,12 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   box(scene, 1800, 0.15, 1800, 0, -0.075, 0, 0x879e6b);
   for (const sidewalk of SIDEWALKS) box(scene, sidewalk.width, SIDEWALK_HEIGHT, sidewalk.depth, sidewalk.x, SIDEWALK_HEIGHT / 2, sidewalk.z, 0xc9c8b9);
-  for (const road of PAVED_SURFACES) box(scene, road.width, ROAD_HEIGHT, road.depth, road.x, ROAD_HEIGHT / 2, road.z, 0x596168);
+  material(0x596168).map = createAsphaltTexture();
+  for (const road of PAVED_SURFACES) {
+    const mesh = box(scene, road.width, ROAD_HEIGHT, road.depth, road.x, ROAD_HEIGHT / 2, road.z, 0x596168);
+    const positions = mesh.geometry.getAttribute('position'), uv = mesh.geometry.getAttribute('uv');
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (positions.getX(i) + road.x) * 0.5, (positions.getZ(i) + road.z) * 0.5);
+  }
   for (const driveway of DRIVEWAYS) box(scene, driveway.width, ROAD_HEIGHT, driveway.depth, driveway.x, ROAD_HEIGHT / 2, driveway.z, 0xb8b9aa);
   for (const line of PARKING_MARKINGS) box(scene, line.width, 0.006, line.depth, line.x, 0.084, line.z, 0xe9e7da).castShadow = false;
   const vertices = rampVertices();
@@ -82,34 +88,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   const cyclistVisuals = createCyclistVisuals(scene);
   const pedestrianVisuals = createPedestrianVisuals(scene);
 
-  for (const house of HOUSES) {
-    // Plain massing only: walls and a pitched roof, without doors or windows.
-    box(scene, house.width + 0.5, 0.25, house.depth + 0.5, house.x, 0.1, house.z, 0xb7b7a9);
-    box(scene, house.width, house.height, house.depth, house.x, house.height / 2, house.z, house.color);
-    const roofGeometry = new THREE.CylinderGeometry(0, 1, 1, 4, 1);
-    roofGeometry.rotateY(Math.PI / 4);
-    const roof = new THREE.Mesh(roofGeometry, material(house.roofColor));
-    roof.scale.set((house.width + 1.6) / Math.SQRT2, 3.5, (house.depth + 1.6) / Math.SQRT2);
-    roof.position.set(house.x, house.height + 1.75, house.z);
-    roof.castShadow = true;
-    scene.add(roof);
-  }
-
-  const crownGeometry = new THREE.IcosahedronGeometry(1, 1);
-  const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.29, 3.5, 7);
-  for (const [index, tree] of TREES.entries()) {
-    const trunk = new THREE.Mesh(trunkGeometry, material(0x776853));
-    trunk.position.set(tree.x, 1.75 * tree.size, tree.z);
-    trunk.scale.setScalar(tree.size);
-    trunk.castShadow = true;
-    scene.add(trunk);
-    const crown = new THREE.Mesh(crownGeometry, material([0x587448, 0x6b8551, 0x78945c][index % 3]!));
-    crown.position.set(tree.x, 4.7 * tree.size, tree.z);
-    crown.scale.set(2.7 * tree.size, 3.2 * tree.size, 2.5 * tree.size);
-    crown.castShadow = true;
-    crown.receiveShadow = true;
-    scene.add(crown);
-  }
+  const scenery = createSceneryVisuals(scene);
   // Low hedges make the sandbox's collision boundary visible.
   for (const boundary of BOUNDARY_OBSTACLES) box(scene, boundary.halfWidth * 2, 1.6, boundary.halfDepth * 2, boundary.x, 0.8, boundary.z, 0x617a50);
 
@@ -151,13 +130,22 @@ export function createScene(canvas: HTMLCanvasElement) {
   }
   box(car, 1.7, 0.2, 0.55, 0, 0.81, -0.65, 0x273332);
   box(car, 1.65, 0.07, 0.58, 0, 0.94, -0.68, 0x36423f);
+  // Inset dash vents and a center console stay below the validated windshield sightline.
+  for (const x of [-0.7, -0.12, 0.35, 0.65]) {
+    box(car, 0.18, 0.075, 0.012, x, 0.85, -0.367, 0x111d1e);
+    for (const y of [0.83, 0.855, 0.88]) box(car, 0.16, 0.008, 0.014, x, y, -0.359, 0x58635f);
+  }
+  box(car, 0.27, 0.22, 0.5, 0.12, 0.58, -0.13, 0x273332);
   const wheelMeshes: THREE.Group[] = [];
   const tireGeometry = new THREE.CylinderGeometry(CAR.tireRadius, CAR.tireRadius, 0.18, 16);
   tireGeometry.rotateZ(Math.PI / 2);
+  const hubGeometry = new THREE.CylinderGeometry(CAR.tireRadius * 0.62, CAR.tireRadius * 0.62, 0.184, 12);
+  hubGeometry.rotateZ(Math.PI / 2);
   for (const z of [-CAR.wheelbase / 2, CAR.wheelbase / 2]) {
     for (const x of [-SUSPENSION.trackWidth / 2, SUSPENSION.trackWidth / 2]) {
       const wheel = new THREE.Group();
       wheel.add(new THREE.Mesh(tireGeometry, material(0x242b2b)));
+      wheel.add(new THREE.Mesh(hubGeometry, material(0x929c9c)));
       wheel.position.set(x, -SUSPENSION.restLength, z);
       chassis.add(wheel);
       wheelMeshes.push(wheel);
@@ -207,6 +195,7 @@ export function createScene(canvas: HTMLCanvasElement) {
       return { point: camera.position.clone(), forward: camera.getWorldDirection(new THREE.Vector3()), up: new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion) };
     },
     render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry', windshield = emptyWindshield, cyclists: readonly CyclistBody[] = []) {
+      scenery.update(physics.position);
       lighting.update(timeOfDay, state.headlights, physics.position, physics.rotation, weather);
       weatherVisuals.update(weather, trafficTime, physics.position, windshield);
       material(0x596168).roughness = weather === 'rain' ? 0.42 : 0.92;

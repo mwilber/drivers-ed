@@ -4,7 +4,7 @@ export interface RoadRect extends Point { width: number; depth: number }
 export interface Junction extends Point { id: string; name: string }
 export interface Street { id: string; from: string; to: string; width: number; name: string }
 export const ROAD_WIDTH = 10;
-export const WORLD_BOUNDS = { minX: -177, maxX: 177, minZ: -194, maxZ: 245 } as const;
+export const WORLD_BOUNDS = { minX: -177, maxX: 177, minZ: -194, maxZ: 365 } as const;
 export const JUNCTION_RADIUS = 18;
 export const JUNCTIONS: readonly Junction[] = [
   { id: 'nw', name: 'Northwest bend', x: -100, z: -60 },
@@ -17,6 +17,8 @@ export const JUNCTIONS: readonly Junction[] = [
   { id: 'south', name: 'Garden junction', x: 0, z: 180 },
   { id: 'se', name: 'Southeast bend', x: 100, z: 180 },
   { id: 'lot', name: 'Practice lot', x: 0, z: -110 },
+  { id: 'park-w', name: 'Park west bend', x: -100, z: 300 },
+  { id: 'park-e', name: 'Park east bend', x: 100, z: 300 },
 ];
 const street = (id: string, from: string, to: string, name: string, width = ROAD_WIDTH): Street => ({ id, from, to, name, width });
 export const STREETS: readonly Street[] = [
@@ -26,6 +28,9 @@ export const STREETS: readonly Street[] = [
   street('west-s', 'west', 'sw', 'Garden Drive'), street('middle-s', 'center', 'south', 'Garden Drive'), street('east-s', 'east', 'se', 'Garden Drive'),
   street('south-w', 'sw', 'south', 'Garden Street'), street('south-e', 'south', 'se', 'Garden Street'),
   street('lot-access', 'north', 'lot', 'Parking entrance', 16),
+  street('park-west', 'sw', 'park-w', 'Park Drive'),
+  street('park-south', 'park-w', 'park-e', 'Park Avenue'),
+  street('park-east', 'park-e', 'se', 'Park Drive'),
 ];
 export function junction(id: string): Junction { return JUNCTIONS.find(node => node.id === id)!; }
 export function streetSurface(s: Street): RoadRect {

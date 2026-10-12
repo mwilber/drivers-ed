@@ -203,7 +203,10 @@ export class VehicleTraffic {
         if (other.arrivedAt === undefined) continue;
         // Arrival/right-priority ordering was resolved as a group above.
       } else if ((approach.kind === 'stop' || approach.kind === 'yield') && otherApproach.kind === 'priority') { car.reason = 'Through traffic'; return false; }
-      else if (c.turn === 'left' && otherLane.direction.x * approach.direction.x + otherLane.direction.z * approach.direction.z < -0.5 && this.nextConnection(other)?.turn !== 'left') { car.reason = 'Oncoming traffic'; return false; }
+      // A priority-road left turn does not yield back to a stopped minor approach.
+      // That mutual wait becomes possible where the park loop joins Garden Drive.
+      else if (c.turn === 'left' && !(approach.kind === 'priority' && ['stop', 'yield', 'all-way-stop'].includes(otherApproach.kind))
+        && otherLane.direction.x * approach.direction.x + otherLane.direction.z * approach.direction.z < -0.5 && this.nextConnection(other)?.turn !== 'left') { car.reason = 'Oncoming traffic'; return false; }
     }
     // A moving player approaching the junction gets a conservative gap, independent of their compliance.
     if (player && Math.abs(player.speed) > 0.3) {

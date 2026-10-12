@@ -6,6 +6,7 @@ export { PARKING_LOT, PARKING_ENTRANCE, TEST_AREA, TEST_ENTRANCE, WORLD_BOUNDS, 
 export interface Rect { x: number; z: number; width: number; depth: number }
 export interface House extends Rect { height: number; color: number; roofColor: number }
 export interface Tree { x: number; z: number; size: number }
+export const PARK_PAVILION: House = { x: 0, z: 332, width: 22, depth: 14, height: 6, color: 0xd9cbb8, roofColor: 0x476a64 };
 
 // Lane geometry and physical pavement share the same street definitions.
 export const ROADS: readonly Rect[] = STREET_SURFACES;
@@ -48,8 +49,12 @@ for (const x of [-65, -35, 35, 65]) {
   for (const z of [112, 211]) HOUSES.push({ x, z, width: 13, depth: 12, height: 6, color: colors[HOUSES.length % colors.length]!, roofColor: 0x696a62 });
 }
 
+for (const x of [-60, -32, 32, 60]) {
+  HOUSES.push({ x, z: 270, width: 13, depth: 12, height: 6, color: colors[HOUSES.length % colors.length]!, roofColor: 0x696a62 });
+}
+HOUSES.push(PARK_PAVILION);
 export const DRIVEWAYS: readonly Rect[] = HOUSES.filter(house => Math.abs(house.x) < 100).map(house => {
-  const roadZ = house.z > 150 ? 180 : house.z < 0 ? -60 : 60;
+  const roadZ = house.z > 245 ? 300 : house.z > 150 ? 180 : house.z < 0 ? -60 : 60;
   const towardRoad = Math.sign(roadZ - house.z);
   const edge = house.z + towardRoad * house.depth / 2;
   const end = roadZ - towardRoad * 5;
@@ -97,6 +102,8 @@ for (const x of [-113, -86, -15, 15, 86, 113]) {
 }
 
 for (const x of [-82, -18, 18, 82]) TREES.push({ x, z: 203, size: 1 });
+for (const x of [-72, -42, 42, 72]) TREES.push({ x, z: 332, size: 1.2 });
+for (const x of [-60, -30, 30, 60]) TREES.push({ x, z: 236, size: 1.1 });
 
 const boundaryCenterZ = (WORLD_BOUNDS.minZ + WORLD_BOUNDS.maxZ) / 2;
 const boundaryHalfDepth = (WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) / 2;

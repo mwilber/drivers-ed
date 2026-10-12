@@ -1,8 +1,8 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 11 adds procedural engine, transmission, tire/surface, horn, indicator, impact, scrape, nearby traffic, wind, and rain audio with saved volume controls. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 begins with a connected southern park loop, a pavilion landmark, detailed house facades and trees, procedural asphalt, and cockpit/wheel trim. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
-![Drivers Ed Phase 11 driving sound settings](docs/screenshots/app-phase-11-audio.jpg)
+![Drivers Ed Phase 12 park loop](docs/screenshots/app-phase-12-park.jpg)
 
 ## Run locally
 
@@ -292,6 +292,7 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/driving-lighting.ts`: Shared scene lighting, chassis-following headlights, and fixed shadow-map budget.
 - `src/windshield-rain.ts`: Deterministic water accumulation, swept-sector clearing, and world-space streak positions.
 - `src/weather-visuals.ts`: Bounded rain streaks, forward glass texture, and blade meshes.
+- `src/scenery-visuals.ts`: Shared instanced house/tree/pavilion geometry, distance detail, deterministic asphalt, and resource budgets.
 - `src/render-profile.ts`: Opt-in local development frame-rate and CPU measurements.
 - `src/driving-audio.ts`: Validated sound preferences, fixed-step loop/cue state, material feedback, and bounded traffic/scrape pools.
 - `src/audio-output.ts`: Procedural Web Audio mixer, camera listener, smooth gains, output ceiling, and browser activation/pause/disposal lifecycle.
@@ -325,6 +326,7 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `tests/weather.test.mjs`: Condition migration, rain fog/restoration, windshield clearing and budgets, wet stops/force limits, grass preservation, and physical wet traffic/crossing regressions.
 - `tests/driving-audio.test.mjs`: Driving sounds, saved settings, real damage event lifecycles, voice budgets, physics preservation, and fixed-step cue consistency.
 - `tests/audio-browser.html`, `tests/audio-browser.mjs`: Manually triggered real-time activation and offline browser DSP/rendered-output checks.
+- `tests/world-expansion.test.mjs`: Park navigation, physical dry/wet traffic and cyclists, priority regression, and scenery resource checks.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
@@ -340,6 +342,22 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `scripts/physics-scenarios.mjs`: Current rigid-body measurements used by tests and `npm run handling:check`.
 
 Three.js, TypeScript, and Vite were approved for Phase 1; `@types/three` supplies Three.js's TypeScript definitions. `@dimforge/rapier3d-compat` was approved for Phase 3. Ask the project owner before adding any other third-party libraries. Keep subsequent work within the phase explicitly requested.
+
+## Phase 12 — World expansion and visual detail (first playable increment)
+
+Select **Park loop and pavilion** in **Try a road example** to start in Park on the new eastbound avenue. The three-street, 440 m extension connects the southwest and southeast Garden junctions through two new bends, with a 200 m straight, four houses, eight trees, and a green-roofed pavilion. Both exits stop before joining Garden traffic; the entire loop retains a 15 mph limit. Normal traffic and cyclists can select its lanes through the shared route graph. The map, pavement, curbs, signs, driveways, physics, and lane connections use the same definitions. The outer boundary extends 120 m south.
+
+House doors/window trim and layered foliage use shared instanced geometry. Building shells, roofs, trunks, main tree crowns, and the pavilion fascia stay visible at every distance. Extra facade/foliage detail enters within 100 m and leaves beyond 115 m, using the driver's position for both cockpit and mirror passes. Instance buffers are reused when detail changes. Foundation footprints match house colliders; thin decorative trim adds at most 2 cm, and roof overhangs remain overhead. A deterministic 64 × 64 asphalt tile uses metre-based coordinates and retains dry/rain material changes. Dashboard vents, a low console, and wheel hubs refine the player sedan without changing the camera, damage panels, or vehicle dimensions. External asset loading is deferred: this increment needs no downloaded assets or new libraries.
+
+The scenery-only acceptance budgets are **24 draw calls, 45,000 triangles, 1 MiB of geometry/instance buffers, and 16 KiB of texture data**. With every detail enabled, the current house/tree/pavilion batches use **21 draw calls, 22,352 triangles, and 72,192 bytes of geometry/instance buffers**; the asphalt tile uses 16,384 bytes. These exclude the pre-existing road, vehicle, weather, shadow, and mirror resources. Tests enforce these limits and check repeated near/far transitions without reallocating instance arrays.
+
+The provisional development-host frame budget is **16.7 ms mean / 33.3 ms p95 frame CPU** over 300 frames at the park start, standard mirrors, Busy traffic, pedestrians and cyclists. Use `?profile=1`; samples now restart when changing neighborhood as well as driving conditions. These are local CPU budgets, not GPU timings, total-process memory limits, or a supported-device guarantee. Broader device validation and larger expansion increments remain pending.
+
+Acceptance checks cover the player's safe start and launch, every lane/turn's sedan and curb clearance, matching physical pavement, signed limits and controlled exits, physical traffic completing both directions in dry/rain, distance-detail resource bounds, physical cyclists completing both new routes in dry/rain, and earlier handling/traffic/cyclist regressions. A new regression checks that a priority-road left turn proceeds before an opposing stopped park exit, avoiding a mutual-yield deadlock. The larger scene exposed support-impulse spikes in the rider/bicycle impulse joint. A reduced-coordinate fixed joint stabilizes riding while retaining the same masses, dimensions, controller forces, and separate bodies released on impact. Seeded starting motion is applied once through the solver; repeated setup calls do not add further boosts. Collision, pedestrian-impact, lifecycle, and frame-rate regressions cover this change.
+
+Local browser samples at 1280 × 720 with Busy traffic, three pedestrians, two cyclists, and standard mirrors measured **4.13 ms mean / 5.60 ms p95 frame CPU** in dry daylight and **5.96 ms mean / 5.70 ms p95** in dusk/rain with headlights and Slow wipers. Both meet the provisional CPU budget. A few expensive frames can raise the mean above p95; these short samples include browser scheduling and do not measure GPU completion.
+
+Validation for this increment: **163 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the documented sedan measurements. The production build continues to report the existing large-bundle advisory.
 
 ## Development roadmap
 
@@ -461,7 +479,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
-### Phase 12 — World expansion and visual detail
+### Phase 12 — World expansion and visual detail (first playable increment implemented)
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 

@@ -16,7 +16,8 @@ export const APPROACHES: readonly Approach[] = LANES.filter(l => l.to !== 'lot')
   const kind: ControlKind = node.id === 'north' ? 'all-way-stop' : node.id === 'center' ? 'signal'
     : node.id === 'south' && lane.streetId === 'middle-s' ? 'stop'
     : node.id === 'west' && lane.streetId === 'town-w' ? 'stop'
-    : node.id === 'east' && lane.streetId === 'town-e' ? 'yield' : 'priority';
+    : node.id === 'east' && lane.streetId === 'town-e' ? 'yield'
+    : (node.id === 'sw' && lane.streetId === 'park-west') || (node.id === 'se' && lane.streetId === 'park-east') ? 'stop' : 'priority';
   const x = node.x - lane.direction.x * STOP_DISTANCE - lane.direction.z * ROAD_WIDTH / 4;
   const z = node.z - lane.direction.z * STOP_DISTANCE + lane.direction.x * ROAD_WIDTH / 4;
   const controlled = kind !== 'priority';
@@ -27,6 +28,7 @@ export const APPROACHES: readonly Approach[] = LANES.filter(l => l.to !== 'lot')
 export interface SpeedZone { id: string; name: string; mph: number; areas: readonly RoadRect[] }
 export const SPEED_ZONES: readonly SpeedZone[] = [
   { id: 'practice', name: 'Practice area', mph: 10, areas: [PARKING_LOT, { ...PARKING_ENTRANCE, z: -78, depth: 4 }, TEST_AREA, TEST_ENTRANCE] },
+  { id: 'park', name: 'Park neighborhood', mph: 15, areas: [{ x: 0, z: 305.5, width: 354, depth: 119 }] },
   { id: 'garden', name: 'Garden neighborhood', mph: 15, areas: [{ x: 0, z: 162, width: 300, depth: 168 }] },
   { id: 'town', name: 'Town neighborhood', mph: 25, areas: [{ x: (WORLD_BOUNDS.minX + WORLD_BOUNDS.maxX) / 2, z: (WORLD_BOUNDS.minZ + WORLD_BOUNDS.maxZ) / 2, width: WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX, depth: WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ }] },
 ];
@@ -63,6 +65,10 @@ ROAD_SIGNS.push(
   { id: 'test-speed', x: TEST_ENTRANCE.x, z: TEST_ENTRANCE.z + TEST_ENTRANCE.depth / 2 + 1.4, kind: 'speed', direction: { x: 1, z: 0 }, mph: 10 },
   { id: 'parallel-parking', x: 111, z: 131, kind: 'parking', direction: { x: 0, z: -1 } },
 );
+for (const lane of LANES.filter(l => l.streetId.startsWith('park-'))) {
+  const point = { x: lane.start.x + lane.direction.x * 8, z: lane.start.z + lane.direction.z * 8 };
+  ROAD_SIGNS.push({ id: `speed-${lane.id}`, ...roadside(lane, point), kind: 'speed', direction: lane.direction, mph: 15 });
+}
 export interface SignalFixture extends Point { approachId: string; direction: Point; pole: Point }
 export const SIGNAL_FIXTURES: readonly SignalFixture[] = APPROACHES.filter(a => a.kind === 'signal').map(a => {
   const node = junction(a.junctionId), u = a.direction;
@@ -85,6 +91,7 @@ function approachSpawn(junctionId: string, streetId: string, lead: number) {
 }
 const parkingLane = LANES.find(l => l.streetId === 'east-s' && l.to === 'east')!;
 export const ROAD_EXAMPLES = {
+  park: { x: -60, z: 302.5, heading: -Math.PI / 2 },
   signals: approachSpawn('center', 'middle-s', 36),
   stops: approachSpawn('north', 'middle-n', 32),
   garden: approachSpawn('south', 'middle-s', 39),

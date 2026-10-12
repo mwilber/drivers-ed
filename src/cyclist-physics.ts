@@ -13,7 +13,8 @@ const clamp = (v: number, limit: number) => Math.max(-limit, Math.min(limit, v))
 const yaw = (q: RAPIER.Rotation) => Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y ** 2 + q.z ** 2));
 export interface CyclistBody {
   actor: TrafficCar; bicycle: RAPIER.RigidBody; rider: RAPIER.RigidBody;
-  joint?: RAPIER.ImpulseJoint; state: 'riding' | 'fallen'; fallenFor: number; blockedFor: number;
+  spawnVelocity?: RAPIER.Vector;
+  joint?: RAPIER.MultibodyJoint; state: 'riding' | 'fallen'; fallenFor: number; blockedFor: number;
 }
 export interface CyclistImpact { id: number; speed: number; material: string }
 
@@ -30,7 +31,7 @@ export class CyclistPhysics {
   drainEvents(): CyclistImpact[] { const events = this.events; this.events = []; return events; }
   clear(): void { for (const entry of this.bodies.values()) this.remove(entry); this.bodies.clear(); this.events = []; }
   private remove(entry: CyclistBody): void {
-    if (entry.joint) this.physics.world.removeImpulseJoint(entry.joint, true);
+    if (entry.joint) this.physics.world.removeMultibodyJoint(entry.joint, true);
     for (const body of [entry.bicycle, entry.rider]) {
       this.physics.unregisterContactBody(body);
       for (let i = 0; i < body.numColliders(); i++) this.physics.setColliderMaterial(body.collider(i).handle);
@@ -46,7 +47,7 @@ export class CyclistPhysics {
     if (!impact && up > 0.65) return;
     entry.state = 'fallen'; entry.actor.fallen = true; entry.actor.recovering = true; entry.actor.driveSpeed = 0;
     this.traffic.releaseReservations(entry.actor);
-    if (entry.joint) { this.physics.world.removeImpulseJoint(entry.joint, true); entry.joint = undefined; }
+    if (entry.joint) { this.physics.world.removeMultibodyJoint(entry.joint, true); entry.joint = undefined; }
     for (const body of [entry.bicycle, entry.rider]) {
       body.resetForces(true); body.resetTorques(true);
       for (let i = 0; i < body.numColliders(); i++) {
@@ -74,11 +75,15 @@ export class CyclistPhysics {
         .setRotation({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }).setMass(3), 'bicycle');
     }
     add(rider, RAPIER.ColliderDesc.capsule(0.32, 0.22).setMass(CYCLIST.riderMass), 'rider');
-    const joint = world.createImpulseJoint(RAPIER.JointData.fixed({ x: 0, y: 0.8, z: 0.12 }, identity, { x: 0, y: 0, z: 0 }, identity), bicycle, rider, true);
-    joint.setContactsEnabled(false);
     const velocity = { x: -Math.sin(actor.heading) * actor.speed, y: 0, z: -Math.cos(actor.heading) * actor.speed };
     bicycle.setLinvel(velocity, true); rider.setLinvel(velocity, true); actor.physical = true;
-    const entry: CyclistBody = { actor, bicycle, rider, joint, state: 'riding', fallenFor: 0, blockedFor: 0 };
+    // A reduced-coordinate fixed joint avoids redundant impulse constraints between
+    // the narrow wheel contacts and rider. Larger scenery changed contact ordering
+    // enough to expose support-impulse spikes with the former impulse joint.
+    // Removing this joint on impact still releases two independent finite-mass bodies.
+    const joint = world.createMultibodyJoint(RAPIER.JointData.fixed({ x: 0, y: 0.8, z: 0.12 }, identity, { x: 0, y: 0, z: 0 }, identity), bicycle, rider, true);
+    joint.setContactsEnabled(false);
+    const entry: CyclistBody = { actor, bicycle, rider, joint, spawnVelocity: actor.speed ? velocity : undefined, state: 'riding', fallenFor: 0, blockedFor: 0 };
     for (const body of [bicycle, rider]) this.physics.registerContactBody(body, contacts => this.fall(entry, contacts));
     return entry;
   }
@@ -91,6 +96,10 @@ export class CyclistPhysics {
       const { bicycle, rider } = entry;
       bicycle.resetForces(true); bicycle.resetTorques(true); rider.resetForces(true); rider.resetTorques(true);
       if (entry.state === 'fallen') continue;
+      // The reduced-coordinate articulation starts with zero generalized velocity.
+      // Seed its requested motion through one solver-integrated force step; keep
+      // pre-solver body velocities available for contact severity sampling.
+      const spawnVelocity = entry.spawnVelocity;
       const pos = bicycle.translation(), v = bicycle.linvel(), q = bicycle.rotation(), angular = bicycle.angvel();
       const dx = actor.x - pos.x, dz = actor.z - pos.z, headingError = angle(actor.heading - yaw(q));
       const speed = Math.abs(headingError) > 0.6 || Math.hypot(dx, dz) > 1 ? 0 : actor.driveSpeed;
@@ -101,7 +110,7 @@ export class CyclistPhysics {
       // Distribute the riding controller across the coupled masses, avoiding a large
       // artificial joint impulse from applying the entire motor to the light frame.
       for (const [body, mass] of [[bicycle, CYCLIST.bicycleMass], [rider, CYCLIST.riderMass]] as const) {
-        body.addForce({ x: ax * mass, y: 0, z: az * mass }, true);
+        body.addForce({ x: (ax + (spawnVelocity?.x ?? 0) / FIXED_STEP) * mass, y: 0, z: (az + (spawnVelocity?.z ?? 0) / FIXED_STEP) * mass }, true);
       }
       const ux = 2 * (q.x * q.y - q.w * q.z), uz = 2 * (q.y * q.z + q.w * q.x);
       const torque = { x: clamp(-uz * 3600 - angular.x * 320, 2500), y: clamp(headingError * 100 - angular.y * 35, 100),
@@ -120,6 +129,7 @@ export class CyclistPhysics {
   }
   afterStep(dt = FIXED_STEP): void {
     for (const [id, entry] of this.bodies) {
+      entry.spawnVelocity = undefined;
       const { bicycle, actor } = entry, pos = bicycle.translation(), heading = yaw(bicycle.rotation()), v = bicycle.linvel();
       const pose = { x: pos.x, z: pos.z, heading, speed: -v.x * Math.sin(heading) - v.z * Math.cos(heading) };
       if (entry.state === 'fallen') { Object.assign(actor, pose); entry.fallenFor += dt; }

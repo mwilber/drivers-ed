@@ -135,7 +135,7 @@ test('road example starts are paved, obstacle-free, and point toward their adver
     assert.ok(isOnRoad(spawn.x, spawn.z));
     assert.ok(OBSTACLES.every(o => !overlapsCar(spawn.x, spawn.z, spawn.heading, o)));
     assert.ok(SIDEWALKS.every(s => !overlapsCar(spawn.x, spawn.z, spawn.heading, { ...s, halfWidth: s.width / 2, halfDepth: s.depth / 2 })));
-    if (id !== 'parking') assert.equal(upcomingControl(spawn, spawn.heading).approach.kind, expected[id]);
+    if (id in expected) assert.equal(upcomingControl(spawn, spawn.heading).approach.kind, expected[id]);
   }
 });
 

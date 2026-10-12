@@ -495,6 +495,8 @@ function drawMap() {
   }
   c.fillStyle = '#526b55'; c.font = 'bold 9px sans-serif';
   c.fillText('15 MPH', -50, 160);
+  c.fillText('PARK · 15 MPH', 0, 245);
+  c.fillText('PAVILION', 0, 352);
   c.fillText('25 MPH', -50, 4);
   c.fillText('P', 107, 118);
   for (const vehicle of traffic.vehicles) {
@@ -637,7 +639,7 @@ async function start() {
     scene.render(car, physics!, view, headLook.yaw, time, trafficSignals.seconds, traffic.cars, pedestrians!.people, conditions.timeOfDay, conditions.weather, windshield, cyclists!.riders);
     audio.update(audioModel.loops, audioModel.drainCues(), scene.audioListenerPose());
     drawMap();
-    profile?.record(`${conditions.timeOfDay}, ${conditions.weather}, wipers ${conditions.wipers}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}, cyclists ${cyclists!.count}`, intervalMs, performance.now() - frameStart);
+    profile?.record(`${speedZoneAt(car)?.id}, ${conditions.timeOfDay}, ${conditions.weather}, wipers ${conditions.wipers}, lights ${car.headlights ? 'on' : 'off'}, mirrors ${view.mirrors}, traffic ${trafficDensity.value}, pedestrians ${pedestriansEnabled.checked ? 'on' : 'off'}, cyclists ${cyclists!.count}`, intervalMs, performance.now() - frameStart);
   }
   requestAnimationFrame(frame);
 }

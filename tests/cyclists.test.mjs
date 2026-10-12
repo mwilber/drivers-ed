@@ -52,6 +52,20 @@ test('a cyclist completes physical lane routes and turns, with an upright couple
   }
 });
 
+test('seeded bicycle motion survives repeated setup syncs and is applied only once', async t => {
+  const w = await world(t, { environment: 'flat' });
+  const actor = w.traffic.add(['middle-n:center>north'], 22, 5, 'cyclist'); actor.parked = true;
+  w.bikes.sync(w.traffic.cars); w.bikes.sync(w.traffic.cars);
+  const entry = w.bikes.getBody(actor.id), start = entry.bicycle.translation();
+  w.step();
+  assert.ok(actor.speed > 4.5 && actor.speed <= 5.05, 'the first solver step establishes the requested motion within contact/drag tolerance');
+  assert.ok(start.z - entry.bicycle.translation().z > 0.015);
+  assert.equal(entry.spawnVelocity, undefined);
+  w.advance(2);
+  assert.ok(Math.abs(actor.speed) < 0.1, 'the normal controller brakes after the starting step');
+  assert.equal(entry.state, 'riding');
+});
+
 test('bicycles stop at red signals, complete all-way stops, and yield to entered pedestrians', async t => {
   const w = await world(t);
   const signalLane = LANES.find(l => l.id === 'middle-s:south>center');
@@ -203,13 +217,13 @@ test('cyclist density is independent, spawns stay clear, and disable/reset/retir
   for (const cyclist of w.traffic.cyclists) for (const car of w.traffic.vehicles) assert.ok(Math.hypot(cyclist.x - car.x, cyclist.z - car.z) >= 18);
   w.traffic.setDensity('off'); w.cars.sync(w.traffic.cars); assert.equal(w.bikes.count, 2);
   w.traffic.setCyclists(false); w.bikes.sync(w.traffic.cars);
-  assert.equal(w.bikes.count, 0); assert.ok(bodies.every(b => !b.isValid())); assert.equal(w.sim.world.bodies.len(), count); assert.equal(w.sim.world.impulseJoints.len(), 0);
+  assert.equal(w.bikes.count, 0); assert.ok(bodies.every(b => !b.isValid())); assert.equal(w.sim.world.bodies.len(), count); assert.equal(w.sim.world.multibodyJoints.len(), 0);
   const crashed = await impact(t, 8); const old = crashed.entry;
   crashed.advance(CYCLIST.retirementSeconds);
   assert.equal(crashed.bikes.count, 0); assert.ok(!crashed.traffic.cars.includes(crashed.actor));
   assert.equal(old.bicycle.isValid(), false); assert.equal(old.rider.isValid(), false);
   for (let i = 0; i < 5; i++) { w.traffic.setCyclists(true); w.bikes.sync(w.traffic.cars); w.bikes.clear(); w.traffic.reset(); }
-  w.bikes.sync([]); assert.equal(w.sim.world.impulseJoints.len(), 0); assert.equal(w.sim.world.bodies.len(), count);
+  w.bikes.sync([]); assert.equal(w.sim.world.multibodyJoints.len(), 0); assert.equal(w.sim.world.bodies.len(), count);
 });
 
 test('collision example works with ordinary controls; rider/bicycle state and events agree at 30/60/144 Hz', async t => {
