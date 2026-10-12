@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sedan visual review</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9ede6; color: #273b35; font: 15px system-ui; }
+  header { padding: 18px 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+  h1 { font-size: 22px; margin: 0; } p { margin: 4px 0; }
+  label { display: flex; align-items: center; gap: 6px; }
+  select, button { font: inherit; padding: 7px 10px; }
+  canvas { display: block; width: 100%; height: 65vh; }
+  footer { padding: 16px 28px; }
+</style>
+<header>
+  <div><h1>Sedan visual review</h1><p>Production traffic models · drag to orbit, scroll to zoom.</p></div>
+  <label>Lighting <select id="lighting"><option value="day">Day</option><option value="night">Night</option></select></label>
+  <label>Detail <select id="detail"><option value="near">Near</option><option value="far">Far</option></select></label>
+  <label><input type="checkbox" id="damage"> Maximum damage</label>
+  <label><input type="checkbox" id="rolling"> Rolling wheels</label>
+  <button id="check">Run visual checks</button>
+</header>
+<canvas id="review" aria-label="Front and rear three-quarter views of the shared sedan models"></canvas>
+<footer><p id="status" role="status">Ready</p><p id="resources"></p><p>This review uses the same geometry, lamps, damage panels and distance detail as free driving. It adds no vehicle physics or gameplay controls.</p></footer>
+<script type="module" src="./sedan-browser.mjs"></script>
+</html>

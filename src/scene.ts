@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createSceneryVisuals, createAsphaltTexture } from './scenery-visuals.ts';
 import { createRoadVisuals } from './road-visuals.ts';
 import { createDamageVisuals } from './damage-visuals.ts';
+import { createSedanResources } from './sedan-visuals.ts';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { indicatorLit, type CarState } from './simulation.ts';
 import type { VehiclePhysics } from './vehicle-physics.ts';
@@ -84,7 +85,8 @@ export function createScene(canvas: HTMLCanvasElement) {
     scene.add(label);
   }
   const roadVisuals = createRoadVisuals(scene);
-  const trafficVisuals = createTrafficVisuals(scene);
+  const sedan = createSedanResources();
+  const trafficVisuals = createTrafficVisuals(scene, sedan);
   const cyclistVisuals = createCyclistVisuals(scene);
   const pedestrianVisuals = createPedestrianVisuals(scene);
 
@@ -97,10 +99,11 @@ export function createScene(canvas: HTMLCanvasElement) {
   const car = new THREE.Group();
   car.position.y = -SUSPENSION.centerOfMassHeight;
   chassis.add(car);
-  // A blank sedan with a hood, cabin frame, dashboard, and simple steering wheel.
+  // Shared exterior/wheels surround the validated open cockpit and damage panels.
   const paint = 0xc8cec8;
   const damageVisuals = createDamageVisuals();
   car.add(damageVisuals.group);
+  car.add(sedan.exterior().group);
   const headlightMaterials: THREE.MeshStandardMaterial[] = [];
   const rearLampMaterials: THREE.MeshStandardMaterial[] = [];
   const signalMaterials: { side: 'left' | 'right'; paint: THREE.MeshStandardMaterial }[] = [];
@@ -137,15 +140,9 @@ export function createScene(canvas: HTMLCanvasElement) {
   }
   box(car, 0.27, 0.22, 0.5, 0.12, 0.58, -0.13, 0x273332);
   const wheelMeshes: THREE.Group[] = [];
-  const tireGeometry = new THREE.CylinderGeometry(CAR.tireRadius, CAR.tireRadius, 0.18, 16);
-  tireGeometry.rotateZ(Math.PI / 2);
-  const hubGeometry = new THREE.CylinderGeometry(CAR.tireRadius * 0.62, CAR.tireRadius * 0.62, 0.184, 12);
-  hubGeometry.rotateZ(Math.PI / 2);
   for (const z of [-CAR.wheelbase / 2, CAR.wheelbase / 2]) {
     for (const x of [-SUSPENSION.trackWidth / 2, SUSPENSION.trackWidth / 2]) {
-      const wheel = new THREE.Group();
-      wheel.add(new THREE.Mesh(tireGeometry, material(0x242b2b)));
-      wheel.add(new THREE.Mesh(hubGeometry, material(0x929c9c)));
+      const wheel = sedan.wheel();
       wheel.position.set(x, -SUSPENSION.restLength, z);
       chassis.add(wheel);
       wheelMeshes.push(wheel);
@@ -201,7 +198,7 @@ export function createScene(canvas: HTMLCanvasElement) {
       material(0x596168).roughness = weather === 'rain' ? 0.42 : 0.92;
       material(0x596168).color.setHex(weather === 'rain' ? 0x444d55 : 0x596168);
       roadVisuals.update(trafficTime);
-      trafficVisuals.update(traffic, trafficTime, timeOfDay, weather);
+      trafficVisuals.update(traffic, trafficTime, timeOfDay, weather, physics.position);
       pedestrianVisuals.update(pedestrians, trafficTime);
       cyclistVisuals.update(cyclists, trafficTime, timeOfDay, weather);
       damageVisuals.update(physics.damage);
@@ -215,7 +212,7 @@ export function createScene(canvas: HTMLCanvasElement) {
         const wheel = wheelMeshes[i]!;
         wheel.position.set(pose.x, pose.y, pose.z);
         wheel.rotation.y = pose.steering;
-        wheel.children[0]!.rotation.x = pose.rotation;
+        for (const part of wheel.children) part.rotation.x = pose.rotation;
       }
       steeringWheel.rotation.z = state.steering * 2.8;
       position.copy(physics.position);

@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 begins with a connected southern park loop, a pavilion landmark, detailed house facades and trees, procedural asphalt, and cockpit/wheel trim. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds a connected southern park loop, a pavilion landmark, detailed house facades and trees, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
 ![Drivers Ed Phase 12 park loop](docs/screenshots/app-phase-12-park.jpg)
 
@@ -293,12 +293,13 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/windshield-rain.ts`: Deterministic water accumulation, swept-sector clearing, and world-space streak positions.
 - `src/weather-visuals.ts`: Bounded rain streaks, forward glass texture, and blade meshes.
 - `src/scenery-visuals.ts`: Shared instanced house/tree/pavilion geometry, distance detail, deterministic asphalt, and resource budgets.
+- `src/sedan-visuals.ts`: Shared sedan exterior, sloped traffic windows, frames, wheels, detail thresholds and retained-buffer budgets.
 - `src/render-profile.ts`: Opt-in local development frame-rate and CPU measurements.
 - `src/driving-audio.ts`: Validated sound preferences, fixed-step loop/cue state, material feedback, and bounded traffic/scrape pools.
 - `src/audio-output.ts`: Procedural Web Audio mixer, camera listener, smooth gains, output ceiling, and browser activation/pause/disposal lifecycle.
 - `src/vehicle-physics.ts`: Rapier world, colliders, dynamic chassis, wheel suspension, state synchronization, and reset/recovery.
 - `src/vehicle-damage.ts`: Persistent panel/wheel damage, bounded handling effects, contact latches, and identified impact/scrape audio events.
-- `src/damage-visuals.ts`: Independent placeholder body panels, dents/scratches, and restoration of original geometry and paint.
+- `src/damage-visuals.ts`: Independent body panels with visual wheel arches, dents, instanced scratches, and restoration of original geometry and paint.
 - `src/vehicle-config.ts`: Sedan dimensions, mass, engine torque curve, transmission ratios, and suspension/handling tuning.
 - `src/simulation-clock.ts`: Fixed-step accumulator shared by the browser and frame-rate regression checks.
 - `src/road-network.ts`: Shared streets, junctions, generated directional lanes/turn paths, crossings, and parking spaces.
@@ -307,7 +308,7 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/vehicle-traffic.ts`: Seeded lane drivers, following/braking, junction priority/reservations, and density lifecycle.
 - `src/traffic-scenarios.ts`: Repeatable following, stop, left-turn, through-priority, and collision fixtures.
 - `src/traffic-physics.ts`: Dynamic traffic motors, physical pose reconciliation, collision recovery, and collider/damage lifecycle in the player's Rapier world.
-- `src/traffic-visuals.ts`: Pooled placeholder sedans with independent damage panels, brake lamps, and indicators.
+- `src/traffic-visuals.ts`: Pooled sedans with independent damage panels, rolling wheels, distance detail, brake lamps, and indicators.
 - `src/cyclist-config.ts`: Authored bicycle/rider dimensions, mass, speeds, passing clearance, and retirement interval.
 - `src/cyclist-physics.ts`: Coupled dynamic bicycle/rider bodies, bounded riding forces, contact-driven separation, and physical lifecycle.
 - `src/cyclist-scenarios.ts`: Repeatable passing, opposing-turn, and collision fixtures.
@@ -327,6 +328,8 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `tests/driving-audio.test.mjs`: Driving sounds, saved settings, real damage event lifecycles, voice budgets, physics preservation, and fixed-step cue consistency.
 - `tests/audio-browser.html`, `tests/audio-browser.mjs`: Manually triggered real-time activation and offline browser DSP/rendered-output checks.
 - `tests/world-expansion.test.mjs`: Park navigation, physical dry/wet traffic and cyclists, priority regression, and scenery resource checks.
+- `tests/sedan-visuals.test.mjs`: Model bounds, tire visibility, cockpit sightlines, detail hysteresis, rolling/pause, damage restoration, and Busy pool/resource limits.
+- `tests/sedan-browser.html`, `tests/sedan-browser.mjs`: Orbitable production sedan review with live WebGL, lighting, damage and distance-detail checks.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
 - `tests/vehicle-traffic.test.mjs`: Routes, spacing, priority, signals, player interference, lifecycle, sustained Busy traffic, frame-rate consistency, and physical traffic impacts.
 - `tests/traffic-collisions.test.mjs`: Mutual damage/momentum, relative contact velocity, gradual and blocked recovery, pooled visuals, frame-rate consistency, and sustained dynamic Busy traffic.
@@ -358,6 +361,22 @@ Acceptance checks cover the player's safe start and launch, every lane/turn's se
 Local browser samples at 1280 × 720 with Busy traffic, three pedestrians, two cyclists, and standard mirrors measured **4.13 ms mean / 5.60 ms p95 frame CPU** in dry daylight and **5.96 ms mean / 5.70 ms p95** in dusk/rain with headlights and Slow wipers. Both meet the provisional CPU budget. A few expensive frames can raise the mean above p95; these short samples include browser scheduling and do not measure GPU completion.
 
 Validation for this increment: **163 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the documented sedan measurements. The production build continues to report the existing large-bundle advisory.
+
+## Phase 12 — Shared sedan detail (second playable increment)
+
+Traffic sedans now have sloped front/rear glass, framed side windows, door seams and handles, a grille, bumpers, sills, wheel arches, and five-spoke rims. The player shares the exterior trim and wheels while retaining the existing open cockpit, pillars, dashboard, camera and seating limits. Visual wheel arches lift the lower outer vertices of the existing damage panels without enlarging their footprint; repairs restore those authored positions exactly. Dimensions, collision shapes, suspension, handling, traffic decisions and damage thresholds remain unchanged.
+
+One set of decorative geometry/material buffers serves every sedan in the scene. Traffic wheels roll with signed speed and simulation time, stop while paused/stationary, and reset when a visual slot receives another actor. Close detail enters within **45 m** and leaves beyond **60 m** of the driver, shared by cockpit and mirror passes. Door seams, grille trim, window dividers and rims disappear at distance; body panels, window silhouettes, tires, dents, scratches and every operating lamp remain. Distance and density changes reuse existing resources. Scratch marks use one instanced draw per panel instead of seven separate meshes. No external assets, textures, lights, shadow passes, render targets or third-party packages were added.
+
+Acceptance budgets for **16 Busy traffic sedans** are **640 authored draws per view, 60,000 triangles, and 2 MiB of retained geometry/instance/repair-snapshot buffers**. With all close detail, maximum damage on every panel, brakes and left indicators active, the pool uses **512 draws, 56,608 triangles, and 716,352 bytes**. Distant detail reduces that to **400 draws and 22,752 triangles** with the same retained memory. These counts exclude scenery, the player's cockpit, materials, lights, GPU driver overhead and additional mirror/shadow passes; they are resource ceilings rather than GPU timing guarantees.
+
+Run Vite and open **`/tests/sedan-browser.html`** to orbit two production models, switch Day/Night and Near/Far detail, inspect maximum damage, animate wheels, and run the live WebGL checks. Automated checks cover the unchanged sedan envelope and wheelbase, visible tire arches, clear forward/shoulder/rear rays at seating extremes, hysteresis, lamp/damage retention at distance, rolling/pause/reverse, actor reuse, exact repair, buffer reuse and worst-case Busy resources.
+
+Validation: **170 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the same acceleration, braking, coast, turning and top-speed measurements. The live browser review passes with clean and maximally damaged cars and reports no WebGL console errors. The existing production bundle-size advisory remains.
+
+At the current **897 × 839** browser viewport, 300-frame Park samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **3.90 ms mean / 5.30 ms p95 frame CPU** in dry daylight and **4.20 ms mean / 5.30 ms p95** in dusk/rain with headlights and Slow wipers. Both meet the provisional 16.7/33.3 ms CPU budget. The viewport differs from the first increment's sample; these are local CPU checks, not a direct GPU/device performance comparison.
+
+![Shared sedan visual review](docs/screenshots/phase-12-sedan-review.jpg)
 
 ## Development roadmap
 
@@ -479,7 +498,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
-### Phase 12 — World expansion and visual detail (first playable increment implemented)
+### Phase 12 — World expansion and visual detail (two playable increments implemented)
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 
