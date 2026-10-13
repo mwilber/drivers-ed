@@ -14,25 +14,61 @@ interface Batch { mesh: THREE.InstancedMesh; instances: Instance[]; detail: bool
 export function createSceneryVisuals(scene: THREE.Scene) {
   const group = new THREE.Group(); group.name = 'Neighborhood scenery'; scene.add(group);
   const cube = new THREE.BoxGeometry(1, 1, 1);
+  cube.name = 'Facade and foundation';
+  const siding = new THREE.PlaneGeometry(1, 1); siding.name = 'Siding';
   const roof = new THREE.CylinderGeometry(0, 1, 1, 4, 1); roof.rotateY(Math.PI / 4);
+  roof.name = 'Hipped roof';
+  // Closed triangular prism, with the same eaves/ridge envelope as the hip roof.
+  const gable = new THREE.BufferGeometry(); gable.name = 'Gabled roof';
+  gable.setAttribute('position', new THREE.Float32BufferAttribute([
+    -0.5, -0.5, -0.5, 0, 0.5, -0.5, 0.5, -0.5, -0.5,
+    -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0, 0.5, 0.5,
+    -0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0, 0.5, 0.5,
+    -0.5, -0.5, -0.5, 0, 0.5, 0.5, 0, 0.5, -0.5,
+    0.5, -0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5,
+    0.5, -0.5, -0.5, 0, 0.5, 0.5, 0.5, -0.5, 0.5,
+    -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5,
+    -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5,
+  ], 3));
+  gable.computeVertexNormals();
   const crown = new THREE.IcosahedronGeometry(1, 1);
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 3.5, 7);
   const pending = new Map<string, { geometry: THREE.BufferGeometry; color: number; detail: boolean; instances: Instance[] }>();
   const pose = new THREE.Object3D();
-  function add(geometry: THREE.BufferGeometry, color: number, owner: Point, x: number, y: number, z: number, w: number, h: number, d: number, detail = false) {
+  function add(geometry: THREE.BufferGeometry, color: number, owner: Point, x: number, y: number, z: number, w: number, h: number, d: number, detail = false, rotationY = 0) {
     const key = `${geometry.uuid}:${color}:${detail}`;
     if (!pending.has(key)) pending.set(key, { geometry, color, detail, instances: [] });
-    pose.position.set(x, y, z); pose.scale.set(w, h, d); pose.updateMatrix();
+    pose.position.set(x, y, z); pose.scale.set(w, h, d); pose.rotation.set(0, rotationY, 0); pose.updateMatrix();
     pending.get(key)!.instances.push({ matrix: pose.matrix.clone(), owner });
   }
-  for (const house of HOUSES) {
+  for (const [index, house] of HOUSES.entries()) {
     const { x, z, width: w, height: h, depth: d } = house;
     add(cube, house.color, house, x, h / 2, z, w, h, d);
     // Foundation stays within the collider's footprint; roof overhang remains overhead.
     add(cube, 0xb7b7a9, house, x, 0.12, z, w, 0.24, d);
-    add(roof, house.roofColor, house, x, h + 1.75, z, (w + 1.6) / Math.SQRT2, 3.5, (d + 1.6) / Math.SQRT2);
+    const gabled = house !== PARK_PAVILION && house !== MEWS_MARKET && index % 3 === 0;
+    const span = gabled ? 1 : Math.SQRT2;
+    add(gabled ? gable : roof, house.roofColor, house, x, h + 1.75, z, (w + 1.6) / span, 3.5, (d + 1.6) / span);
+    // Persistent eaves identify the roof edge from cockpit and mirror views.
+    // Their undersides are at the existing wall height, above the drivable envelope.
+    for (const side of [-1, 1]) {
+      add(cube, 0xf1ead8, house, x, h + 0.05, z + side * (d / 2 + 0.72), w + 1.6, 0.1, 0.16);
+      add(cube, 0xf1ead8, house, x + side * (w / 2 + 0.72), h + 0.05, z, 0.16, 0.1, d + 1.6);
+    }
     for (const side of [-1, 1]) {
       const face = z + side * (d / 2 + 0.006);
+      for (const corner of [-1, 1]) add(cube, 0xf1ead8, house, x + corner * (w / 2 - 0.09), h / 2, face, 0.18, h, 0.014, true);
+      for (let y = 0.6; y < h - 0.3; y += 0.6) {
+        add(siding, 0xf1ead8, house, x, y, face, w - 0.36, 0.035, 1, true, side === -1 ? Math.PI : 0);
+        add(siding, 0xf1ead8, house, x + side * (w / 2 + 0.006), y, z, d - 0.36, 0.035, 1, true, side * Math.PI / 2);
+      }
+      // Side windows stay on the shell; no shutters or other low projections.
+      const sideFace = x + side * (w / 2 + 0.006);
+      for (const offset of [-d * 0.27, d * 0.27]) {
+        add(cube, 0xf1ead8, house, sideFace, 3.2, z + offset, 0.014, 1.9, 2.15, true);
+        add(cube, 0x364b57, house, sideFace + side * 0.009, 3.2, z + offset, 0.004, 1.6, 1.85, true);
+        add(cube, 0xf1ead8, house, sideFace + side * 0.012, 3.2, z + offset, 0.004, 1.65, 0.08, true);
+      }
       // Thin planes of trim extend at most 2 cm: no new physical projections.
       add(cube, 0xf1ead8, house, x, 1.35, face, 1.35, 2.7, 0.014, true);
       add(cube, 0x476a64, house, x, 1.27, face + side * 0.009, 1.12, 2.5, 0.004, true);

@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, detailed house facades and trees, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, detailed trees, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
 ![Drivers Ed Phase 12 park loop](docs/screenshots/app-phase-12-park.jpg)
 
@@ -329,6 +329,8 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `tests/audio-browser.html`, `tests/audio-browser.mjs`: Manually triggered real-time activation and offline browser DSP/rendered-output checks.
 - `tests/world-expansion.test.mjs`: Park navigation, physical dry/wet traffic and cyclists, priority regression, and scenery resource checks.
 - `tests/mews-expansion.test.mjs`: Narrow lanes and signed limits, player launch, old lane preservation, physical car/cyclist navigation, assigned driveways, asymmetric bounds and scenery resources.
+- `tests/architecture.test.mjs`: Roof/facade envelopes, network sightlines, side-window hysteresis and retained scenery resources.
+- `tests/architecture-browser.html`, `tests/architecture-browser.mjs`: Orbitable production neighborhood review with Town/Park/Mews views, lighting and distance-detail checks.
 - `tests/sedan-visuals.test.mjs`: Model bounds, tire visibility, cockpit sightlines, detail hysteresis, rolling/pause, damage restoration, and Busy pool/resource limits.
 - `tests/sedan-browser.html`, `tests/sedan-browser.mjs`: Orbitable production sedan review with live WebGL, lighting, damage and distance-detail checks.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
@@ -385,7 +387,7 @@ Select **Narrow Mews loop and market** in **Try a road example** to start in Par
 
 The new streets have **8 m pavement and 4 m lanes**, compared with the original 10 m streets and 5 m lanes. Lane centers, control bars and roadside signs derive from the authored travel width. The practice entrance explicitly retains its original 10 m travel corridor inside its wider 16 m paved apron. Every existing lane keeps its previous positions and width. The two new bends and their joining East/Southeast junctions use **30 m aprons**, allowing the full sedan footprint to turn without clipping narrower-road curbs. Turn paths, vehicle dimensions, steering, grip and collision behavior remain unchanged.
 
-New houses and the market name their connecting street; their driveways derive from that street's actual pavement edge and cut matching flush curb openings. Market windows and its fascia reuse instanced facade materials, and its solid building shell matches the house collider. Scenery retains the **100/115 m** detail thresholds and the existing budgets: with all detail enabled, the expanded world uses **21 scenery draws, 25,164 triangles and 80,256 geometry/instance bytes**. The asphalt tile remains 16 KiB. No downloaded assets, textures, lights or dependencies were added.
+New houses and the market name their connecting street; their driveways derive from that street's actual pavement edge and cut matching flush curb openings. Market windows and its fascia reuse instanced facade materials, and its solid building shell matches the house collider. Scenery retains the **100/115 m** detail thresholds and the existing budgets. At this increment's checkpoint, with all detail enabled, the expanded world used **21 scenery draws, 25,164 triangles and 80,256 geometry/instance bytes**. The asphalt tile remains 16 KiB. No downloaded assets, textures, lights or dependencies were added.
 
 Acceptance checks cover all existing/new lane and turn clearances in both supported driving-side orientations, achievable turn radii, matching Rapier pavement, correctly placed signs, unchanged old lane positions, a stable player start/launch, physical cars and cyclists completing both directions in dry/rain without impacts/falls, flush driveway physics, asymmetric hedge/map bounds and repeated scenery detail transitions without new buffers. Wider-world Busy traffic, crossings, cyclists, collisions, mirrors and handling retain their regression checks.
 
@@ -396,6 +398,20 @@ Validation: **178 tests pass**, `npm run build` succeeds, and `npm run handling:
 At **897 × 839**, 300-frame Mews samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **3.93 ms mean / 5.70 ms p95 frame CPU** in dry daylight and **4.69 ms mean / 6.30 ms p95** in dusk/rain with headlights and Slow wipers. Both meet the provisional 16.7/33.3 ms CPU budget. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
 
 ![Narrow Mews loop and market](docs/screenshots/app-phase-12-mews.jpg)
+
+## Phase 12 — Neighborhood architecture (fourth playable increment)
+
+Homes now mix closed gabled and hipped roofs, with persistent pale eaves outlining each roof. Side windows, corner boards and horizontal siding refine all four walls, including the pavilion and market. Selected homes use gabled roofs; both landmarks retain their recognizable green hipped roofs and striped fascia. Building positions, wall heights, solid colliders, driveways, streets, lane paths and vehicle behavior remain unchanged. Facade detail extends at most **2 cm** beyond the wall; roofs/eaves retain the existing **0.8 m overhead overhang and 3.5 m roof height**.
+
+Siding uses shared instanced planes; windows and trim reuse the existing cube/material batches. Facade detail follows the same **100 m entry / 115 m exit** thresholds from the driver for cockpit and mirror views. Roofs, eaves, building shells, foundations and main tree silhouettes stay visible at distance. With every detail enabled, scenery uses **24 draws, 38,852 triangles and 237,388 bytes of geometry/instance buffers**, within the existing 24-draw/45,000-triangle/1-MiB budgets. Fully distant scenery uses **17 draws and 9,892 triangles** with the same retained buffers. Asphalt remains the only scenery texture at 16 KiB; no assets or packages were downloaded, and no lights or render targets were added.
+
+Run Vite and open **`/tests/architecture-browser.html`** to orbit Town homes, the Park pavilion and Mews market, switch Day/Night or Near/Distant detail, and run live rendering/resource checks. Automated checks cover every roof and low facade envelope, forward/rear lane-edge sightlines across the road network, side-window hysteresis, silhouette retention and repeated transitions without replacing geometry, materials or instance arrays.
+
+Validation: **181 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the documented sedan measurements. Browser review covers all three locations, near/far restoration and night lighting, with no console warnings or errors. Free driving and braking on the Park loop remain usable with the detailed buildings. The existing production bundle-size advisory remains.
+
+At **897 × 839**, 300-frame Park samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **4.04 ms mean / 5.40 ms p95 frame CPU** in dry daylight and **4.70 ms mean / 5.90 ms p95** in dusk/rain with headlights and Slow wipers. A denser Garden view at the traffic-signals start measured **5.47 / 7.80 ms** in dry daylight with the same traffic/mirror settings. All meet the provisional **16.7/33.3 ms** CPU budget. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
+
+![Neighborhood architecture review](docs/screenshots/phase-12-architecture-review.jpg)
 
 ## Development roadmap
 
@@ -517,7 +533,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
-### Phase 12 — World expansion and visual detail (three playable increments implemented)
+### Phase 12 — World expansion and visual detail (four playable increments implemented)
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 
