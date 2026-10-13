@@ -1,57 +1,9 @@
 import * as THREE from 'three';
-import { centerMarkings, CROSSINGS, STREETS, JUNCTION_RADIUS, junction, type Marking } from './road-network.ts';
 import { APPROACHES, ROAD_SIGNS, ROAD_POSTS, SIGNAL_FIXTURES, LANE_ARROWS, type RoadSign } from './traffic-layout.ts';
 import { signalState } from './traffic-rules.ts';
 import { ROAD_HEIGHT } from './world-layout.ts';
 
 export function createRoadVisuals(scene: THREE.Scene) {
-  const paints = new Map<number, THREE.MeshStandardMaterial>();
-  function paint(line: Marking) {
-    if (!paints.has(line.color)) paints.set(line.color, new THREE.MeshStandardMaterial({ color: line.color, roughness: 1 }));
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(line.width, 0.006, line.depth), paints.get(line.color));
-    mesh.position.set(line.x, ROAD_HEIGHT + 0.005, line.z);
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-  }
-  for (const marking of centerMarkings()) paint(marking);
-  for (const crossing of CROSSINGS) {
-    const horizontalRoad = !!crossing.direction.x;
-    const length = (horizontalRoad ? crossing.depth : crossing.width) - 4;
-    for (let offset = -length / 2 + 0.5; offset < length / 2; offset += 1) paint({
-      x: crossing.x + (horizontalRoad ? 0 : offset), z: crossing.z + (horizontalRoad ? offset : 0),
-      width: horizontalRoad ? 2 : 0.5, depth: horizontalRoad ? 0.5 : 2, color: 0xf3f1df,
-    });
-  }
-  // Edge paint follows the same gaps as the lane endpoints; junction centers stay clear.
-  for (const s of STREETS.filter(s => s.id !== 'lot-access')) {
-    const a = junction(s.from), b = junction(s.to), length = Math.hypot(b.x - a.x, b.z - a.z);
-    const u = { x: (b.x - a.x) / length, z: (b.z - a.z) / length };
-    for (const side of [-1, 1]) {
-      const middle = { x: (a.x + b.x) / 2 - u.z * side * (s.width / 2 - 0.15), z: (a.z + b.z) / 2 + u.x * side * (s.width / 2 - 0.15) };
-      paint({ ...middle, width: u.x ? length - JUNCTION_RADIUS * 2 : 0.1, depth: u.z ? length - JUNCTION_RADIUS * 2 : 0.1, color: 0xf3f1df });
-    }
-  }
-  for (const approach of APPROACHES) {
-    if (!approach.line) continue;
-    if (approach.kind !== 'yield') paint(approach.line);
-    else {
-      // Inverted triangles distinguish a yield line from a stop bar.
-      const u = approach.direction, right = { x: -u.z, z: u.x };
-      for (const offset of [-1.7, -0.85, 0, 0.85, 1.7]) {
-        const geometry = new THREE.BufferGeometry();
-        const x = approach.x + right.x * offset, z = approach.z + right.z * offset;
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute([
-          x + u.x * 0.4, ROAD_HEIGHT + 0.012, z + u.z * 0.4,
-          x - u.x * 0.3 + right.x * 0.3, ROAD_HEIGHT + 0.012, z - u.z * 0.3 + right.z * 0.3,
-          x - u.x * 0.3 - right.x * 0.3, ROAD_HEIGHT + 0.012, z - u.z * 0.3 - right.z * 0.3,
-        ], 3));
-        geometry.computeVertexNormals();
-        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xf3f1df, roughness: 1, side: THREE.DoubleSide }));
-        mesh.receiveShadow = true;
-        scene.add(mesh);
-      }
-    }
-  }
   const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x7b8181, roughness: 0.7 });
   function poleBox(width: number, height: number, depth: number, x: number, y: number, z: number) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), poleMaterial);

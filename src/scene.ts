@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { createSceneryVisuals, createAsphaltTexture } from './scenery-visuals.ts';
+import { createSceneryVisuals } from './scenery-visuals.ts';
+import { createPavementVisuals } from './pavement-visuals.ts';
 import { createRoadVisuals } from './road-visuals.ts';
 import { createDamageVisuals } from './damage-visuals.ts';
 import { createSedanResources } from './sedan-visuals.ts';
@@ -19,7 +20,7 @@ import { createWeatherVisuals } from './weather-visuals.ts';
 import { WindshieldRain } from './windshield-rain.ts';
 import type { Pedestrian } from './pedestrians.ts';
 import { MIRRORS, MIRROR_BUDGET, MirrorSchedule, mirrorGeometry, placeDriverCamera, placeMirrorCamera, type ViewSettings } from './cockpit.ts';
-import { BOUNDARY_OBSTACLES, DRIVEWAYS, PARKING_MARKINGS, PAVED_SURFACES, rampVertices, ROAD_HEIGHT, SIDEWALKS, SIDEWALK_HEIGHT, TEST_CURB, TEST_RAMP } from './world-layout.ts';
+import { BOUNDARY_OBSTACLES, rampVertices, ROAD_HEIGHT, TEST_CURB, TEST_RAMP } from './world-layout.ts';
 
 const materials = new Map<number, THREE.MeshStandardMaterial>();
 function material(color: number): THREE.MeshStandardMaterial {
@@ -53,15 +54,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   const lighting = createDrivingLighting(scene);
 
   box(scene, 1800, 0.15, 1800, 0, -0.075, 0, 0x879e6b);
-  for (const sidewalk of SIDEWALKS) box(scene, sidewalk.width, SIDEWALK_HEIGHT, sidewalk.depth, sidewalk.x, SIDEWALK_HEIGHT / 2, sidewalk.z, 0xc9c8b9);
-  material(0x596168).map = createAsphaltTexture();
-  for (const road of PAVED_SURFACES) {
-    const mesh = box(scene, road.width, ROAD_HEIGHT, road.depth, road.x, ROAD_HEIGHT / 2, road.z, 0x596168);
-    const positions = mesh.geometry.getAttribute('position'), uv = mesh.geometry.getAttribute('uv');
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, (positions.getX(i) + road.x) * 0.5, (positions.getZ(i) + road.z) * 0.5);
-  }
-  for (const driveway of DRIVEWAYS) box(scene, driveway.width, ROAD_HEIGHT, driveway.depth, driveway.x, ROAD_HEIGHT / 2, driveway.z, 0xb8b9aa);
-  for (const line of PARKING_MARKINGS) box(scene, line.width, 0.006, line.depth, line.x, 0.084, line.z, 0xe9e7da).castShadow = false;
+  const pavement = createPavementVisuals(scene);
   const vertices = rampVertices();
   const points = [];
   for (let i = 0; i < vertices.length; i += 3) points.push(new THREE.Vector3(vertices[i], vertices[i + 1], vertices[i + 2]));
@@ -193,10 +186,9 @@ export function createScene(canvas: HTMLCanvasElement) {
     },
     render(state: CarState, physics: VehiclePhysics, view: ViewSettings, headYaw: number, time: number, trafficTime = 0, traffic: readonly TrafficCar[] = [], pedestrians: readonly Pedestrian[] = [], timeOfDay: TimeOfDay = 'day', weather: Weather = 'dry', windshield = emptyWindshield, cyclists: readonly CyclistBody[] = []) {
       scenery.update(physics.position);
+      pavement.update(physics.position, weather);
       lighting.update(timeOfDay, state.headlights, physics.position, physics.rotation, weather);
       weatherVisuals.update(weather, trafficTime, physics.position, windshield);
-      material(0x596168).roughness = weather === 'rain' ? 0.42 : 0.92;
-      material(0x596168).color.setHex(weather === 'rain' ? 0x444d55 : 0x596168);
       roadVisuals.update(trafficTime);
       trafficVisuals.update(traffic, trafficTime, timeOfDay, weather, physics.position);
       pedestrianVisuals.update(pedestrians, trafficTime);

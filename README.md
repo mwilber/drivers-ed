@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, detailed trees, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, detailed trees, concrete joints and batched road surfaces/paint, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
 ![Drivers Ed Phase 12 park loop](docs/screenshots/app-phase-12-park.jpg)
 
@@ -293,6 +293,8 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/windshield-rain.ts`: Deterministic water accumulation, swept-sector clearing, and world-space streak positions.
 - `src/weather-visuals.ts`: Bounded rain streaks, forward glass texture, and blade meshes.
 - `src/scenery-visuals.ts`: Shared instanced house/tree/pavilion geometry, distance detail, deterministic asphalt, and resource budgets.
+- `src/pavement-visuals.ts`: Instanced pavement, sidewalks, driveways and paint, world asphalt UVs, concrete joint detail and resource budgets.
+- `src/road-paint.ts`: Shared authored crosswalk, control-bar, edge, center, parking and yield paint definitions.
 - `src/sedan-visuals.ts`: Shared sedan exterior, sloped traffic windows, frames, wheels, detail thresholds and retained-buffer budgets.
 - `src/render-profile.ts`: Opt-in local development frame-rate and CPU measurements.
 - `src/driving-audio.ts`: Validated sound preferences, fixed-step loop/cue state, material feedback, and bounded traffic/scrape pools.
@@ -316,7 +318,7 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/pedestrians.ts`: Crossing gap/phase decisions, bounded walking/balance forces, finite-mass contacts, and actor lifecycle.
 - `src/pedestrian-scenarios.ts`: Repeatable yielding, partial occlusion, and failure-to-yield fixtures.
 - `src/pedestrian-visuals.ts`: Pooled placeholder silhouettes and walking/fallen poses shared by cockpit and mirrors.
-- `src/road-visuals.ts`: Shared road markings, signs, arrows, support posts, and signal lenses.
+- `src/road-visuals.ts`: Signs, arrow decals, support posts and signal lenses.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
 - `src/main.ts`: Input handling, fixed-step loop, instruments, and map.
@@ -331,6 +333,8 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `tests/mews-expansion.test.mjs`: Narrow lanes and signed limits, player launch, old lane preservation, physical car/cyclist navigation, assigned driveways, asymmetric bounds and scenery resources.
 - `tests/architecture.test.mjs`: Roof/facade envelopes, network sightlines, side-window hysteresis and retained scenery resources.
 - `tests/architecture-browser.html`, `tests/architecture-browser.mjs`: Orbitable production neighborhood review with Town/Park/Mews views, lighting and distance-detail checks.
+- `tests/pavement-visuals.test.mjs`: Pavement/physics alignment, inset joint placement, paint preservation, wet restoration, detail hysteresis and buffer budgets.
+- `tests/pavement-browser.html`, `tests/pavement-browser.mjs`: Orbitable production road review and live GPU comparison of world asphalt UVs against the original per-box mapping.
 - `tests/sedan-visuals.test.mjs`: Model bounds, tire visibility, cockpit sightlines, detail hysteresis, rolling/pause, damage restoration, and Busy pool/resource limits.
 - `tests/sedan-browser.html`, `tests/sedan-browser.mjs`: Orbitable production sedan review with live WebGL, lighting, damage and distance-detail checks.
 - `tests/traffic-rules.test.mjs`: US direction, approach controls, zone transitions, signal timing/clearance, movement rules, guidance, example starts, and physical sign impacts.
@@ -412,6 +416,22 @@ Validation: **181 tests pass**, `npm run build` succeeds, and `npm run handling:
 At **897 × 839**, 300-frame Park samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **4.04 ms mean / 5.40 ms p95 frame CPU** in dry daylight and **4.70 ms mean / 5.90 ms p95** in dusk/rain with headlights and Slow wipers. A denser Garden view at the traffic-signals start measured **5.47 / 7.80 ms** in dry daylight with the same traffic/mirror settings. All meet the provisional **16.7/33.3 ms** CPU budget. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
 
 ![Neighborhood architecture review](docs/screenshots/phase-12-architecture-review.jpg)
+
+## Phase 12 — Road surfaces and concrete detail (fifth playable increment)
+
+Sidewalks and driveways now have subtle, flat concrete joints on a **2 m** grid. Each joint stays inset inside its existing surface piece, leaving road, crosswalk and driveway openings clear. Fine joints enter within **100 m** and leave beyond **115 m** of the driver, shared by cockpit and mirror views. All pavement, curbs and road paint remain visible at distance. Road heights, solid colliders, curb cuts, lane geometry, parking dimensions, control lines and vehicle behavior remain unchanged.
+
+Shared instanced boxes replace individual meshes for pavement, sidewalks, driveways, center/edge lines, stop bars, crosswalk stripes and parking paint. Yield teeth use one shared triangle batch. The layer previously required **736 authored draws** when entirely visible; it now uses **8**, including the new concrete joints. Asphalt retains the same seeded **64 × 64 / 16 KiB** tile, world coordinates and **2 m** repeat. Its instance-aware mapping preserves the previous per-box UVs. Wet asphalt keeps the same darker color and 0.42 roughness, returning to the original dry material exactly. Free driving adds no downloaded assets, packages, textures, lights or render targets.
+
+The pavement-layer budgets are **8 draws, 15,000 triangles, 512 KiB of geometry/instance buffers and 16 KiB of texture data**. With every joint enabled, the layer uses **8 draws, 13,951 triangles and 213,724 geometry/instance bytes**. Distant detail uses **7 draws and 8,777 triangles** with the same retained buffers. These counts exclude signs, signal fixtures, arrow decals, scenery and additional shadow/mirror passes. Existing building/tree and sedan budgets remain unchanged.
+
+Run Vite and open **`/tests/pavement-browser.html`** to orbit a Town crossing, house driveway, practice lot or Mews exit, switch Dry/Wet and Near/Distant detail, and run live checks. The browser test compares the production instanced asphalt shader against the original world-UV boxes using three differently sized/positioned probes; dry and wet comparisons measured **zero pixel difference**. The tiny comparison target is created only by this review button and disposed afterward. Automated checks verify every rendered pavement/curb footprint, clear-center Rapier heights, joint placement, every control bar and crosswalk, parking paint, exact yield vertices, persistent paint, wet restoration and repeated detail transitions without replacing resources.
+
+Validation: **185 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the documented sedan measurements. Browser checks cover all four review locations, detail restoration, dry Park driving and wet Mews driving/braking, with undamaged cars, readable cockpit/mirror paint and no console warnings or errors. The existing production bundle-size advisory remains.
+
+At **897 × 838**, 300-frame Park samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **3.56 ms mean / 4.60 ms p95 frame CPU** in dry daylight and **3.69 ms mean / 4.90 ms p95** in dusk/rain with headlights and Slow wipers. The denser Garden view at the traffic-signals start measured **4.39 / 6.10 ms** in dry daylight with the same traffic/mirror settings. All meet the provisional **16.7/33.3 ms** CPU budget. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
+
+![Road surface review](docs/screenshots/phase-12-pavement-review.jpg)
 
 ## Development roadmap
 
@@ -533,7 +553,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
-### Phase 12 — World expansion and visual detail (four playable increments implemented)
+### Phase 12 — World expansion and visual detail (five playable increments implemented)
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 
