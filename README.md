@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, branched trees with varied canopies, concrete joints and batched road surfaces/paint, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, branched trees with varied canopies, concrete joints and batched road surfaces/paint, shaped metal sign boards and signal visors, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
 ![Drivers Ed Phase 12 park loop](docs/screenshots/app-phase-12-park.jpg)
 
@@ -318,7 +318,7 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/pedestrians.ts`: Crossing gap/phase decisions, bounded walking/balance forces, finite-mass contacts, and actor lifecycle.
 - `src/pedestrian-scenarios.ts`: Repeatable yielding, partial occlusion, and failure-to-yield fixtures.
 - `src/pedestrian-visuals.ts`: Pooled placeholder silhouettes and walking/fallen poses shared by cockpit and mirrors.
-- `src/road-visuals.ts`: Signs, arrow decals, support posts and signal lenses.
+- `src/road-visuals.ts`: Batched signs with shaped metal backs, arrow decals, collider-aligned supports, signal visors/lenses and fixture resource budgets.
 - `src/world-layout.ts`: Shared road, house, tree, and obstacle data used by both rendering and simulation.
 - `src/scene.ts`: Three.js scene, placeholder geometry, lighting, and cockpit camera.
 - `src/main.ts`: Input handling, fixed-step loop, instruments, and map.
@@ -344,6 +344,8 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `tests/cyclists.test.mjs`: Physical lane/rule behavior, mixed traffic, passing, separate-body impacts, lifecycle, visual poses, fixed-step consistency, and sustained dry/wet Busy checks.
 - `tests/pedestrians.test.mjs`: Crossing/yielding, impact response, occlusion, lifecycle, visual pose, frame-rate consistency, and sustained Busy traffic with pedestrians.
 - `tests/road-network.test.mjs`: Network connectivity, both driving sides, sedan/curb clearance, feasible turning radii, crossing openings, and parking geometry.
+- `tests/road-visuals.test.mjs`: Post/face/arrow alignment, board envelopes, signal-cycle rendering, clear lane/lamp sightlines, shared textures and retained fixture resources.
+- `tests/road-fixtures-browser.html`, `tests/road-fixtures-browser.mjs`: Orbitable production sign/signal review, live decal pixel comparisons and distant sign depth checks.
 - `tests/simulation.test.mjs`: Acceleration, braking/reverse, steering, speed limits, collision recovery, and layout checks.
 - `tests/handling.test.mjs`: Phase 2 performance targets, transmission interlocks, grip, and frame-rate regressions.
 - `tests/parking-lot.test.mjs`: Paved access, obstacle clearance, and complete practice circles in the parking lot.
@@ -447,6 +449,22 @@ Validation: **187 tests pass**, `npm run build` succeeds, and `npm run handling:
 At **897 × 838**, 300-frame Park samples with those traffic/mirror settings measured **3.34 ms mean / 4.30 ms p95 frame CPU** in dry daylight and **6.16 / 5.70 ms** in dusk/rain with headlights and Slow wipers. The denser Garden view at the traffic-signals start measured **4.52 / 6.00 ms** in dry daylight. All meet the provisional **16.7/33.3 ms** CPU budget. Occasional expensive frames can raise the mean above p95. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
 
 ![Neighborhood vegetation review](docs/screenshots/phase-12-vegetation-review.jpg)
+
+## Phase 12 — Roadside signs and signals (seventh playable increment)
+
+All **51 roadside signs** now have thin metal backs and edges: octagonal stop boards, triangular yield boards and rectangular speed, parking and no-turn-on-red boards. The four all-way plaques also have metal backs. Board outlines fit inside the previous face dimensions and extend **3.7 cm** behind the unchanged face positions. A depth bias keeps the backs behind readable faces at long distances. The four traffic signals gain dark backplates and open-bottom visors; their lenses retain the same positions, colors, brightness and traffic-clock timing. New signal detail remains above **4.35 m**. Physical post footprints, sign text, lane movements, signal rules and vehicle behavior remain unchanged.
+
+Shared instanced geometry replaces individual meshes for posts, booms, sign faces/backs, lane arrows, signal housings and lenses. The fixture layer previously used **165 authored draws** when entirely visible; it now uses **23**, including the added detail, or **22** during all-red clearance. All sign faces, arrows and signal silhouettes persist at distance in cockpit and mirror passes. Signal instance matrices change only when colors change, with retained buffers through pause/reset. One cached all-way texture replaces four identical canvases, reducing base RGBA texture pixels from **9.5 to 8.75 MiB**. No downloaded assets, dependencies, lights or persistent render targets were added.
+
+The fixture-layer acceptance budgets are **24 draws, 5,000 triangles, 128 KiB of geometry/instance buffers and 9 MiB of base texture pixels**. It uses **2,270 triangles, 23,724 geometry/instance bytes and 9,175,040 base texture bytes** throughout the signal cycle. These counts exclude pavement/scenery, material and JavaScript object overhead, texture mipmaps, GPU driver allocations and additional shadow/mirror passes. Existing pavement, scenery and sedan budgets remain unchanged.
+
+Open **`/tests/road-fixtures-browser.html`** to orbit Town signals, an all-way stop, East yield, Mews speed limit or parking sign; switch Front/Back, Day/Night and signal phases; and run live rendering checks. GPU comparisons cover all **91 sign-face/arrow instances**, with **zero pixel difference** against the previous individual-plane rendering. Additional checks compare opaque sign-face pixels with/without their new backs at **20, 60 and 120 m**, using the driving camera's depth range, also with zero difference. The small comparison targets exist only while the review button runs and are disposed afterward. Automated checks cover every post footprint, face/plaque/arrow transform, board bounds, signal transition/reset, lamp visibility from approaching lane positions, low lane-edge sightlines and retained resources.
+
+Validation: **191 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the documented sedan measurements. Browser checks cover all five review locations, front/back boards, Day/Night and each signal phase, plus dry/wet driving and braking toward Town signals with undamaged cars, visible cockpit/mirror fixtures and no console warnings or errors. The production build continues to report the existing large-bundle advisory.
+
+At **1175 × 838**, 300-frame samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **4.03 ms mean / 5.50 ms p95 frame CPU** at the Garden traffic-signals start in dry daylight and **5.12 / 5.40 ms** there in dusk/rain with headlights and Slow wipers. Dry Park measured **3.67 / 4.50 ms**. All meet the provisional **16.7/33.3 ms** CPU budget. The viewport differs from earlier increments; these development-host samples do not measure GPU completion or establish a supported-device guarantee.
+
+![Roadside fixture review](docs/screenshots/phase-12-fixtures-review.jpg)
 
 ## Development roadmap
 
@@ -568,7 +586,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
-### Phase 12 — World expansion and visual detail (six playable increments implemented)
+### Phase 12 — World expansion and visual detail (seven playable increments implemented)
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 

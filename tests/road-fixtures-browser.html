@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadside fixture review</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9ede6; color: #273b35; font: 15px system-ui; }
+  header { padding: 18px 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+  h1 { font-size: 22px; margin: 0; } p { margin: 4px 0; }
+  label { display: flex; align-items: center; gap: 6px; }
+  select, button { font: inherit; padding: 7px 10px; }
+  canvas { display: block; width: 100%; height: 60vh; }
+  footer { padding: 16px 28px; }
+</style>
+<header>
+  <div><h1>Roadside fixtures</h1><p>Production signs and signals · drag to orbit, scroll to zoom.</p></div>
+  <label>Location <select id="location"><option value="signals">Town signal</option><option value="stops">All-way stop</option><option value="yield">East yield</option><option value="mews">Mews speed limit</option><option value="parking">Parking sign</option></select></label>
+  <label>Side <select id="side"><option value="front">Front</option><option value="back">Back</option></select></label>
+  <label>Lighting <select id="lighting"><option value="day">Day</option><option value="night">Night</option></select></label>
+  <label>Signal phase <select id="phase"><option value="0">NS green</option><option value="14">NS yellow</option><option value="17">All red</option><option value="19">EW green</option><option value="33">EW yellow</option></select></label>
+  <button id="check">Run visual checks</button>
+</header>
+<canvas id="review" aria-label="Orbit view of shaped metal sign backs and traffic signal visors"></canvas>
+<footer><p id="status" role="status">Ready</p><p id="resources"></p><p>Signs, arrow decals and signal silhouettes persist at distance. Shared batches retain their buffers throughout the signal cycle.</p><p><a href="/">Open free driving</a></p></footer>
+<script type="module" src="./road-fixtures-browser.mjs"></script>
+</html>
