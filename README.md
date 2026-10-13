@@ -1,6 +1,6 @@
 # Drivers Ed
 
-A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, detailed trees, concrete joints and batched road surfaces/paint, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
+A browser-based, first-person driving sandbox built with TypeScript and WebGL through Three.js. Phase 12 adds connected Park and narrow Mews loops, pavilion and market landmarks, varied roofs, siding and side windows, branched trees with varied canopies, concrete joints and batched road surfaces/paint, procedural asphalt, and shared sedan trim, sloped traffic windows, wheel arches and rolling rims. Procedural driving audio and saved volume controls remain available. Configurable day/dusk/night, shadowed headlights, rain, wet-road grip, visibility, and windshield wipers remain available. Crossing pedestrians and lane-riding cyclists share vehicle yielding, repeatable encounters, and finite-mass collisions on the US road network. The Rapier sedan retains shoulder/rear checks, three rear-facing mirrors, adjustable seating/FOV, camera comfort settings, and engine/brake instruments.
 
 ![Drivers Ed Phase 12 park loop](docs/screenshots/app-phase-12-park.jpg)
 
@@ -292,7 +292,7 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `src/driving-lighting.ts`: Shared scene lighting, chassis-following headlights, and fixed shadow-map budget.
 - `src/windshield-rain.ts`: Deterministic water accumulation, swept-sector clearing, and world-space streak positions.
 - `src/weather-visuals.ts`: Bounded rain streaks, forward glass texture, and blade meshes.
-- `src/scenery-visuals.ts`: Shared instanced house/tree/pavilion geometry, distance detail, deterministic asphalt, and resource budgets.
+- `src/scenery-visuals.ts`: Shared instanced buildings, varied branched trees with vertex shading, distance detail, deterministic asphalt, and resource budgets.
 - `src/pavement-visuals.ts`: Instanced pavement, sidewalks, driveways and paint, world asphalt UVs, concrete joint detail and resource budgets.
 - `src/road-paint.ts`: Shared authored crosswalk, control-bar, edge, center, parking and yield paint definitions.
 - `src/sedan-visuals.ts`: Shared sedan exterior, sloped traffic windows, frames, wheels, detail thresholds and retained-buffer budgets.
@@ -332,7 +332,8 @@ For actual browser DSP checks, run Vite and open **`/tests/audio-browser.html`**
 - `tests/world-expansion.test.mjs`: Park navigation, physical dry/wet traffic and cyclists, priority regression, and scenery resource checks.
 - `tests/mews-expansion.test.mjs`: Narrow lanes and signed limits, player launch, old lane preservation, physical car/cyclist navigation, assigned driveways, asymmetric bounds and scenery resources.
 - `tests/architecture.test.mjs`: Roof/facade envelopes, network sightlines, side-window hysteresis and retained scenery resources.
-- `tests/architecture-browser.html`, `tests/architecture-browser.mjs`: Orbitable production neighborhood review with Town/Park/Mews views, lighting and distance-detail checks.
+- `tests/vegetation.test.mjs`: Collider-aligned stems, overhead branches, foliage envelopes, deterministic shapes/shading and persistent tree resources.
+- `tests/architecture-browser.html`, `tests/architecture-browser.mjs`: Orbitable production neighborhood review with Town/Park/Mews buildings and tree views, lighting and distance-detail checks.
 - `tests/pavement-visuals.test.mjs`: Pavement/physics alignment, inset joint placement, paint preservation, wet restoration, detail hysteresis and buffer budgets.
 - `tests/pavement-browser.html`, `tests/pavement-browser.mjs`: Orbitable production road review and live GPU comparison of world asphalt UVs against the original per-box mapping.
 - `tests/sedan-visuals.test.mjs`: Model bounds, tire visibility, cockpit sightlines, detail hysteresis, rolling/pause, damage restoration, and Busy pool/resource limits.
@@ -407,7 +408,7 @@ At **897 × 839**, 300-frame Mews samples with standard mirrors, Busy traffic, t
 
 Homes now mix closed gabled and hipped roofs, with persistent pale eaves outlining each roof. Side windows, corner boards and horizontal siding refine all four walls, including the pavilion and market. Selected homes use gabled roofs; both landmarks retain their recognizable green hipped roofs and striped fascia. Building positions, wall heights, solid colliders, driveways, streets, lane paths and vehicle behavior remain unchanged. Facade detail extends at most **2 cm** beyond the wall; roofs/eaves retain the existing **0.8 m overhead overhang and 3.5 m roof height**.
 
-Siding uses shared instanced planes; windows and trim reuse the existing cube/material batches. Facade detail follows the same **100 m entry / 115 m exit** thresholds from the driver for cockpit and mirror views. Roofs, eaves, building shells, foundations and main tree silhouettes stay visible at distance. With every detail enabled, scenery uses **24 draws, 38,852 triangles and 237,388 bytes of geometry/instance buffers**, within the existing 24-draw/45,000-triangle/1-MiB budgets. Fully distant scenery uses **17 draws and 9,892 triangles** with the same retained buffers. Asphalt remains the only scenery texture at 16 KiB; no assets or packages were downloaded, and no lights or render targets were added.
+Siding uses shared instanced planes; windows and trim reuse the existing cube/material batches. Facade detail follows the same **100 m entry / 115 m exit** thresholds from the driver for cockpit and mirror views. Roofs, eaves, building shells, foundations and main tree silhouettes stay visible at distance. At this increment's checkpoint, with every detail enabled, scenery used **24 draws, 38,852 triangles and 237,388 bytes of geometry/instance buffers**, within the existing 24-draw/45,000-triangle/1-MiB budgets. Fully distant scenery used **17 draws and 9,892 triangles** with the same retained buffers. Asphalt remained the only scenery texture at 16 KiB; no assets or packages were downloaded, and no lights or render targets were added.
 
 Run Vite and open **`/tests/architecture-browser.html`** to orbit Town homes, the Park pavilion and Mews market, switch Day/Night or Near/Distant detail, and run live rendering/resource checks. Automated checks cover every roof and low facade envelope, forward/rear lane-edge sightlines across the road network, side-window hysteresis, silhouette retention and repeated transitions without replacing geometry, materials or instance arrays.
 
@@ -432,6 +433,20 @@ Validation: **185 tests pass**, `npm run build` succeeds, and `npm run handling:
 At **897 × 838**, 300-frame Park samples with standard mirrors, Busy traffic, three pedestrians and two cyclists measured **3.56 ms mean / 4.60 ms p95 frame CPU** in dry daylight and **3.69 ms mean / 4.90 ms p95** in dusk/rain with headlights and Slow wipers. The denser Garden view at the traffic-signals start measured **4.39 / 6.10 ms** in dry daylight with the same traffic/mirror settings. All meet the provisional **16.7/33.3 ms** CPU budget. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
 
 ![Road surface review](docs/screenshots/phase-12-pavement-review.jpg)
+
+## Phase 12 — Neighborhood vegetation (sixth playable increment)
+
+All **56 trees** now have forked branches and broad, upright or rounded canopies, with stable variations in orientation and three foliage colors. Shared vertex shading adds subtle bark variation and mottled foliage without textures. Canopy vertices are slightly irregular while remaining inside the previous foliage envelope. Tree positions, sizes and solid trunk colliders remain unchanged; stems stay within their **0.28 × size** collider half-width, and branches begin above **2.49 × size metres**, keeping low road sightlines clear.
+
+Trunks, forks and main crowns persist at every distance. Secondary foliage retains the same **100 m entry / 115 m exit** thresholds from the driver for cockpit and mirror views, with reused instance arrays. Branches reuse the trunk batch, and foliage retains its existing color/detail batches. With every detail enabled, scenery uses **24 draws, 41,988 triangles and 247,988 geometry/instance bytes**, within the unchanged **24-draw/45,000-triangle/1-MiB** limits. Fully distant scenery uses **17 draws and 13,028 triangles**, retaining the same buffers. The only texture remains the 16 KiB asphalt tile. No downloaded assets, packages, lights or render targets were added.
+
+Open **`/tests/architecture-browser.html`** and choose **Park trees** or **Town street trees** to orbit the production vegetation, switch Day/Night and Near/Distant detail, and run the live rendering/resource checks. Automated checks cover every stem, branch and foliage envelope, all three persistent crown shapes, deterministic geometry and vertex colors, distance retention, network lane-edge sightlines and unchanged buffer budgets.
+
+Validation: **187 tests pass**, `npm run build` succeeds, and `npm run handling:check` retains the documented sedan measurements. Browser checks cover near/far restoration and night rendering, plus Park driving/braking with Busy traffic, three pedestrians, two cyclists and standard mirrors. No console warnings or errors were reported. The existing production bundle-size advisory remains.
+
+At **897 × 838**, 300-frame Park samples with those traffic/mirror settings measured **3.34 ms mean / 4.30 ms p95 frame CPU** in dry daylight and **6.16 / 5.70 ms** in dusk/rain with headlights and Slow wipers. The denser Garden view at the traffic-signals start measured **4.52 / 6.00 ms** in dry daylight. All meet the provisional **16.7/33.3 ms** CPU budget. Occasional expensive frames can raise the mean above p95. These development-host samples do not measure GPU completion or establish a supported-device guarantee.
+
+![Neighborhood vegetation review](docs/screenshots/phase-12-vegetation-review.jpg)
 
 ## Development roadmap
 
@@ -553,7 +568,7 @@ Each phase should deliver a small playable increment. Agree on measurable accept
 
 **Testing checkpoint:** Sounds track acceleration, speed, surfaces, impacts, and nearby events without clipping, abrupt looping, or continuing incorrectly while paused. Verify distinct light/heavy impact feedback and that repair or reset clears active scrape sounds. The first increment's fixed-step, lifecycle, rendered-output, spatial, and resource-budget checks are described above; subjective tuning and broader browser/device checks remain pending.
 
-### Phase 12 — World expansion and visual detail (five playable increments implemented)
+### Phase 12 — World expansion and visual detail (six playable increments implemented)
 
 **Focus:** Expand the sandbox and replace placeholders without changing validated driving behavior.
 

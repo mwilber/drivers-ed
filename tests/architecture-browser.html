@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neighborhood architecture review</title>
+<title>Neighborhood scenery review</title>
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: #e9ede6; color: #273b35; font: 15px system-ui; }
@@ -14,13 +14,13 @@
   footer { padding: 16px 28px; }
 </style>
 <header>
-  <div><h1>Neighborhood architecture</h1><p>Production scenery · drag to orbit, scroll to zoom.</p></div>
-  <label>Location <select id="location"><option value="town">Town homes</option><option value="park">Park pavilion</option><option value="mews">Mews market</option></select></label>
+  <div><h1>Neighborhood scenery</h1><p>Production scenery · drag to orbit, scroll to zoom.</p></div>
+  <label>Location <select id="location"><option value="town">Town homes</option><option value="park">Park pavilion</option><option value="mews">Mews market</option><option value="trees">Park trees</option><option value="streetTrees">Town street trees</option></select></label>
   <label>Lighting <select id="lighting"><option value="day">Day</option><option value="night">Night</option></select></label>
-  <label>Detail <select id="detail"><option value="near">Near facades</option><option value="far">Distant silhouettes</option></select></label>
+  <label>Detail <select id="detail"><option value="near">Near detail</option><option value="far">Distant silhouettes</option></select></label>
   <button id="check">Run visual checks</button>
 </header>
-<canvas id="review" aria-label="Orbit view of neighborhood roofs, siding and windows"></canvas>
-<footer><p id="status" role="status">Ready</p><p id="resources"></p><p>Building shells, roofs and eaves persist at distance. Windows and siding share the driving view's distance detail and retained buffers.</p><p><a href="/">Open free driving</a></p></footer>
+<canvas id="review" aria-label="Orbit view of neighborhood buildings and branched trees"></canvas>
+<footer><p id="status" role="status">Ready</p><p id="resources"></p><p>Building shells, roofs, trunks, branches and main crowns persist at distance. Facades and secondary foliage share the driving view's distance detail and retained buffers.</p><p><a href="/">Open free driving</a></p></footer>
 <script type="module" src="./architecture-browser.mjs"></script>
 </html>

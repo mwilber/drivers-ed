@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createSceneryVisuals, SCENERY_BUDGET } from '../src/scenery-visuals.ts';
-import { HOUSES, PARK_PAVILION, MEWS_MARKET, PAVED_SURFACES, DRIVEWAYS, SIDEWALKS, ROAD_HEIGHT, SIDEWALK_HEIGHT } from '../src/world-layout.ts';
+import { HOUSES, TREES, PARK_PAVILION, MEWS_MARKET, PAVED_SURFACES, DRIVEWAYS, SIDEWALKS, ROAD_HEIGHT, SIDEWALK_HEIGHT } from '../src/world-layout.ts';
 import { LIGHTING } from '../src/driving-conditions.ts';
 
 const canvas = document.querySelector('#review');
@@ -25,7 +25,8 @@ for (const rect of PAVED_SURFACES) surface(rect, ROAD_HEIGHT, 0x596168);
 for (const rect of DRIVEWAYS) surface(rect, ROAD_HEIGHT, 0xb8b9aa);
 const scenery = createSceneryVisuals(scene), full = scenery.stats();
 const retained = scenery.group.children.map(m => [m.geometry, m.material, m.instanceMatrix.array]);
-const locations = { town: HOUSES.find(h => h.x === -51 && h.z === 39), park: PARK_PAVILION, mews: MEWS_MARKET };
+const locations = { town: HOUSES.find(h => h.x === -51 && h.z === 39), park: PARK_PAVILION, mews: MEWS_MARKET,
+  trees: TREES.find(t => t.x === -72 && t.z === 332), streetTrees: TREES.find(t => t.x === -86 && t.z === 14) };
 const location = document.querySelector('#location'), lighting = document.querySelector('#lighting'), detail = document.querySelector('#detail');
 function update() {
   const setting = LIGHTING[lighting.value];
@@ -38,9 +39,9 @@ function update() {
   document.querySelector('#resources').textContent = `${stats.drawCalls} scenery draws/view · ${stats.triangles.toLocaleString()} triangles · ${stats.geometryBytes.toLocaleString()} retained geometry/instance bytes`;
 }
 function focus() {
-  const house = locations[location.value];
-  controls.target.set(house.x, 3.5, house.z);
-  camera.position.set(house.x - 18, 12, house.z - 25); controls.update(); update();
+  const owner = locations[location.value], tree = 'size' in owner;
+  controls.target.set(owner.x, tree ? 4 : 3.5, owner.z);
+  camera.position.set(owner.x - (tree ? 12 : 18), tree ? 7 : 12, owner.z - (tree ? 16 : 25)); controls.update(); update();
 }
 location.addEventListener('change', focus);
 for (const element of [lighting, detail]) element.addEventListener('change', update);

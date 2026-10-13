@@ -32,13 +32,36 @@ export function createSceneryVisuals(scene: THREE.Scene) {
   ], 3));
   gable.computeVertexNormals();
   const crown = new THREE.IcosahedronGeometry(1, 1);
+  crown.name = 'Tree crown';
+  // Matching positions share the same deformation/shade, including triangle seams.
+  // Keep every vertex inside the old unit sphere; no foliage expands the world envelope.
+  const foliageColors = [];
+  const vertex = new THREE.Vector3();
+  for (let i = 0; i < crown.attributes.position!.count; i++) {
+    vertex.fromBufferAttribute(crown.attributes.position!, i);
+    const patch = (Math.round(vertex.x * 1000) * 17 + Math.round(vertex.y * 1000) * 31 + Math.round(vertex.z * 1000) * 13) >>> 0;
+    const shade = 0.78 + (patch % 19) / 100 + Math.max(0, vertex.y) * 0.04;
+    foliageColors.push(shade, shade, shade);
+    vertex.multiplyScalar(0.9 + (patch % 11) / 100);
+    crown.attributes.position!.setXYZ(i, vertex.x, vertex.y, vertex.z);
+  }
+  crown.setAttribute('color', new THREE.Float32BufferAttribute(foliageColors, 3));
+  crown.computeVertexNormals();
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 3.5, 7);
+  trunk.name = 'Tree trunk and branches';
+  const barkColors = [];
+  for (let i = 0; i < trunk.attributes.position!.count; i++) {
+    vertex.fromBufferAttribute(trunk.attributes.position!, i);
+    const shade = 0.72 + 0.2 * (0.5 + 0.5 * Math.cos(Math.atan2(vertex.z, vertex.x) * 3 + vertex.y * 0.7));
+    barkColors.push(shade, shade, shade);
+  }
+  trunk.setAttribute('color', new THREE.Float32BufferAttribute(barkColors, 3));
   const pending = new Map<string, { geometry: THREE.BufferGeometry; color: number; detail: boolean; instances: Instance[] }>();
   const pose = new THREE.Object3D();
-  function add(geometry: THREE.BufferGeometry, color: number, owner: Point, x: number, y: number, z: number, w: number, h: number, d: number, detail = false, rotationY = 0) {
+  function add(geometry: THREE.BufferGeometry, color: number, owner: Point, x: number, y: number, z: number, w: number, h: number, d: number, detail = false, rotationY = 0, rotationZ = 0) {
     const key = `${geometry.uuid}:${color}:${detail}`;
     if (!pending.has(key)) pending.set(key, { geometry, color, detail, instances: [] });
-    pose.position.set(x, y, z); pose.scale.set(w, h, d); pose.rotation.set(0, rotationY, 0); pose.updateMatrix();
+    pose.position.set(x, y, z); pose.scale.set(w, h, d); pose.rotation.set(0, rotationY, rotationZ); pose.updateMatrix();
     pending.get(key)!.instances.push({ matrix: pose.matrix.clone(), owner });
   }
   for (const [index, house] of HOUSES.entries()) {
@@ -83,9 +106,24 @@ export function createSceneryVisuals(scene: THREE.Scene) {
   for (const [i, tree] of TREES.entries()) {
     const { x, z, size: s } = tree;
     add(trunk, 0x776853, tree, x, 1.75 * s, z, s, s, s);
+    const yaw = i * 2.399963229728653; // Stable variation around the street, without random allocation.
+    for (const side of [-1, 1]) {
+      const reach = side * 1.05, rise = 2.05;
+      add(trunk, 0x776853, tree,
+        x + Math.cos(yaw) * reach * s / 2, 3.625 * s, z - Math.sin(yaw) * reach * s / 2,
+        0.4 * s, Math.hypot(reach, rise) * s / 3.5, 0.4 * s, false, yaw, -Math.atan2(reach, rise));
+    }
     const color = [0x587448, 0x6b8551, 0x78945c][i % 3]!;
-    add(crown, color, tree, x, 4.7 * s, z, 2.7 * s, 3.2 * s, 2.5 * s);
-    for (const side of [-1, 1]) add(crown, color, tree, x + side * 1.3 * s, 5.1 * s, z + side * 0.4 * s, 1.5 * s, 2.1 * s, 1.7 * s, true);
+    // Broad, upright and rounded crowns keep a complete silhouette at distance.
+    const shape = [
+      { y: 5.75, width: 1.8, height: 2.1, reach: 0.95, lower: 4.6, lobe: 1.5 },
+      { y: 5.35, width: 1.35, height: 2.4, reach: 0.85, lower: 4.4, lobe: 1.25 },
+      { y: 5.5, width: 2, height: 2.35, reach: 0.85, lower: 4.7, lobe: 1.6 },
+    ][Math.floor(i / 3) % 3]!;
+    add(crown, color, tree, x, shape.y * s, z, shape.width * s, shape.height * s, shape.width * s, false, yaw);
+    for (const side of [-1, 1]) add(crown, color, tree,
+      x + Math.cos(yaw) * side * shape.reach * s, shape.lower * s, z - Math.sin(yaw) * side * shape.reach * s,
+      shape.lobe * s, 1.65 * s, shape.lobe * s, true, yaw);
   }
   // Recognizable striped pavilion fascia, inside the existing building footprint.
   for (const side of [-1, 1]) for (let i = -4; i <= 4; i++) {
@@ -100,7 +138,7 @@ export function createSceneryVisuals(scene: THREE.Scene) {
   }
   const batches: Batch[] = [];
   for (const entry of pending.values()) {
-    const mesh = new THREE.InstancedMesh(entry.geometry, new THREE.MeshStandardMaterial({ color: entry.color, roughness: 0.92 }), entry.instances.length);
+    const mesh = new THREE.InstancedMesh(entry.geometry, new THREE.MeshStandardMaterial({ color: entry.color, roughness: 0.92, vertexColors: entry.geometry.hasAttribute('color') }), entry.instances.length);
     mesh.castShadow = !entry.detail; mesh.receiveShadow = true;
     entry.instances.forEach((instance, i) => mesh.setMatrixAt(i, instance.matrix));
     mesh.computeBoundingSphere(); group.add(mesh);
