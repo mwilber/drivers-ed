@@ -13,7 +13,7 @@ test('US lanes keep right, have valid connections and arrows describe only possi
   for (const lane of LANES) {
     const node = junction(lane.from), u = lane.direction;
     const rightOffset = -(lane.start.x - node.x) * u.z + (lane.start.z - node.z) * u.x;
-    assert.equal(rightOffset, 2.5);
+    assert.equal(rightOffset, lane.width / 2);
     if (lane.to !== 'lot') assert.ok(LANE_CONNECTIONS.some(c => c.incoming === lane.id));
   }
   for (const arrow of LANE_ARROWS) assert.ok(arrow.turns.length > 0 && isOnRoad(arrow.x, arrow.z));
@@ -34,14 +34,14 @@ test('each controlled approach has exactly one appropriate sign and lane-width t
     assert.equal(sign[0].allWay, approach.kind === 'all-way-stop');
     const u = approach.direction, node = junction(approach.junctionId);
     assert.equal(-(approach.x - node.x) * u.x - (approach.z - node.z) * u.z, STOP_DISTANCE);
-    assert.equal(approach.line.width, u.x ? 0.4 : 4.8);
-    assert.equal(approach.line.depth, u.z ? 0.4 : 4.8);
+    const lane = LANES.find(l => l.id === approach.laneId);
+    assert.equal(approach.line.width, u.x ? 0.4 : lane.width - 0.2);
+    assert.equal(approach.line.depth, u.z ? 0.4 : lane.width - 0.2);
     const crosswalk = CROSSINGS.find(c => c.junctionId === approach.junctionId && c.streetId === LANES.find(l => l.id === approach.laneId).streetId);
     if (crosswalk) {
       const crossDistance = -(crosswalk.x - node.x) * u.x - (crosswalk.z - node.z) * u.z;
       assert.ok(STOP_DISTANCE - 0.2 - crossDistance - 1 >= 1.22, 'stop bar stays at least 4 ft before crosswalk');
     }
-    const lane = LANES.find(l => l.id === approach.laneId);
     const street = STREETS.find(s => s.id === lane.streetId);
     const signOffset = Math.abs(-(sign[0].x - node.x) * u.z + (sign[0].z - node.z) * u.x);
     assert.ok(signOffset >= street.width / 2 + 1, 'sign is on the right verge, outside travel lanes');

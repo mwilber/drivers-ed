@@ -1,10 +1,10 @@
 /** Coordinates are metres: north is -Z. This module has no renderer/physics dependencies. */
 export interface Point { x: number; z: number }
 export interface RoadRect extends Point { width: number; depth: number }
-export interface Junction extends Point { id: string; name: string }
-export interface Street { id: string; from: string; to: string; width: number; name: string }
+export interface Junction extends Point { id: string; name: string; apronWidth?: number }
+export interface Street { id: string; from: string; to: string; width: number; name: string; travelWidth?: number }
 export const ROAD_WIDTH = 10;
-export const WORLD_BOUNDS = { minX: -177, maxX: 177, minZ: -194, maxZ: 365 } as const;
+export const WORLD_BOUNDS = { minX: -177, maxX: 277, minZ: -194, maxZ: 365 } as const;
 export const JUNCTION_RADIUS = 18;
 export const JUNCTIONS: readonly Junction[] = [
   { id: 'nw', name: 'Northwest bend', x: -100, z: -60 },
@@ -12,13 +12,15 @@ export const JUNCTIONS: readonly Junction[] = [
   { id: 'ne', name: 'Northeast bend', x: 100, z: -60 },
   { id: 'west', name: 'West junction', x: -100, z: 60 },
   { id: 'center', name: 'Town crossroads', x: 0, z: 60 },
-  { id: 'east', name: 'East junction', x: 100, z: 60 },
+  { id: 'east', name: 'East junction', x: 100, z: 60, apronWidth: 30 },
   { id: 'sw', name: 'Southwest bend', x: -100, z: 180 },
   { id: 'south', name: 'Garden junction', x: 0, z: 180 },
-  { id: 'se', name: 'Southeast bend', x: 100, z: 180 },
+  { id: 'se', name: 'Southeast bend', x: 100, z: 180, apronWidth: 30 },
   { id: 'lot', name: 'Practice lot', x: 0, z: -110 },
   { id: 'park-w', name: 'Park west bend', x: -100, z: 300 },
   { id: 'park-e', name: 'Park east bend', x: 100, z: 300 },
+  { id: 'mews-n', name: 'Mews north bend', x: 220, z: 60, apronWidth: 30 },
+  { id: 'mews-s', name: 'Mews market bend', x: 220, z: 180, apronWidth: 30 },
 ];
 const street = (id: string, from: string, to: string, name: string, width = ROAD_WIDTH): Street => ({ id, from, to, name, width });
 export const STREETS: readonly Street[] = [
@@ -27,10 +29,14 @@ export const STREETS: readonly Street[] = [
   street('town-w', 'west', 'center', 'Town Street'), street('town-e', 'center', 'east', 'Town Street'),
   street('west-s', 'west', 'sw', 'Garden Drive'), street('middle-s', 'center', 'south', 'Garden Drive'), street('east-s', 'east', 'se', 'Garden Drive'),
   street('south-w', 'sw', 'south', 'Garden Street'), street('south-e', 'south', 'se', 'Garden Street'),
-  street('lot-access', 'north', 'lot', 'Parking entrance', 16),
+  // The lot has a wider paved apron around its original 10 m travel corridor.
+  { ...street('lot-access', 'north', 'lot', 'Parking entrance', 16), travelWidth: ROAD_WIDTH },
   street('park-west', 'sw', 'park-w', 'Park Drive'),
   street('park-south', 'park-w', 'park-e', 'Park Avenue'),
   street('park-east', 'park-e', 'se', 'Park Drive'),
+  street('mews-north', 'east', 'mews-n', 'Mews Lane', 8),
+  street('mews-east', 'mews-n', 'mews-s', 'Mews Lane', 8),
+  street('mews-south', 'mews-s', 'se', 'Market Lane', 8),
 ];
 export function junction(id: string): Junction { return JUNCTIONS.find(node => node.id === id)!; }
 export function streetSurface(s: Street): RoadRect {
@@ -39,7 +45,7 @@ export function streetSurface(s: Street): RoadRect {
 }
 export const STREET_SURFACES = STREETS.filter(s => s.id !== 'lot-access').map(streetSurface);
 // Aprons give a sedan enough space for full-lock turns at every bend/junction.
-export const JUNCTION_SURFACES: readonly RoadRect[] = JUNCTIONS.filter(j => j.id !== 'lot').map(j => ({ x: j.x, z: j.z, width: 24, depth: 24 }));
+export const JUNCTION_SURFACES: readonly RoadRect[] = JUNCTIONS.filter(j => j.id !== 'lot').map(j => ({ x: j.x, z: j.z, width: j.apronWidth ?? 24, depth: j.apronWidth ?? 24 }));
 export interface ParkingSpace extends Point { id: string; width: number; depth: number; heading: number; kind: 'perpendicular' | 'parallel' }
 export const PARKING_SPACES: ParkingSpace[] = [];
 for (let x = -46.5; x < 48; x += 3) PARKING_SPACES.push({ id: `lot-n-${x}`, x, z: -164, width: 3, depth: 6, heading: 0, kind: 'perpendicular' });
@@ -73,9 +79,10 @@ export function createLanes(side: DrivingSide): Lane[] {
   return STREETS.flatMap(s => [[s.from, s.to], [s.to, s.from]].map(([from, to]) => {
     const a = junction(from), b = junction(to), length = Math.hypot(b.x - a.x, b.z - a.z);
     const direction = { x: (b.x - a.x) / length, z: (b.z - a.z) / length };
-    const offset = (side === 'right' ? 1 : -1) * ROAD_WIDTH / 4;
+    const travelWidth = s.travelWidth ?? s.width;
+    const offset = (side === 'right' ? 1 : -1) * travelWidth / 4;
     const point = (node: Point, trim: number): Point => ({ x: node.x + direction.x * trim - direction.z * offset, z: node.z + direction.z * trim + direction.x * offset });
-    return { id: `${s.id}:${from}>${to}`, streetId: s.id, from, to, start: point(a, from === 'lot' ? 0 : JUNCTION_RADIUS), end: point(b, to === 'lot' ? 0 : -JUNCTION_RADIUS), direction, width: ROAD_WIDTH / 2 };
+    return { id: `${s.id}:${from}>${to}`, streetId: s.id, from, to, start: point(a, from === 'lot' ? 0 : JUNCTION_RADIUS), end: point(b, to === 'lot' ? 0 : -JUNCTION_RADIUS), direction, width: travelWidth / 2 };
   }));
 }
 export interface LaneConnection { id: string; junctionId: string; incoming: string; outgoing: string; turn: 'left' | 'right' | 'straight'; points: Point[] }
@@ -84,8 +91,8 @@ export function createConnections(lanes: readonly Lane[]): LaneConnection[] {
     lanes.filter(l => l.from === j.id && l.to !== incoming.from).map(outgoing => {
       const a = incoming.end, b = outgoing.start, u = incoming.direction, v = outgoing.direction;
       const cross = u.x * v.z - u.z * v.x;
-      // Quarter circles are tangent to lane endpoints, with radii 15.5/20.5 m.
-      // A cubic approximation avoids a sharp heading change at the intersection.
+      // Lane endpoints determine turn radii (15.5/20.5 m between the original
+      // 10 m streets). Cubic handles keep turns tangent across width changes.
       const turn = Math.abs(cross) < 0.5 ? 'straight' : cross > 0 ? 'right' : 'left';
       const handle = turn === 'straight' ? JUNCTION_RADIUS * 2 / 3 : (Math.abs((b.x - a.x) * u.x + (b.z - a.z) * u.z)) * 0.55228475;
       const c = { x: a.x + u.x * handle, z: a.z + u.z * handle };

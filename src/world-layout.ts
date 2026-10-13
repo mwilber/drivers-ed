@@ -1,12 +1,13 @@
 import type { Obstacle } from './simulation.ts';
-import { CROSSING_RAMPS, JUNCTION_SURFACES, PARALLEL_PARKING, parkingMarkings, PARKING_LOT, PARKING_ENTRANCE, TEST_AREA, TEST_ENTRANCE, WORLD_BOUNDS, STREET_SURFACES } from './road-network.ts';
+import { CROSSING_RAMPS, JUNCTION_SURFACES, PARALLEL_PARKING, parkingMarkings, PARKING_LOT, PARKING_ENTRANCE, TEST_AREA, TEST_ENTRANCE, WORLD_BOUNDS, STREET_SURFACES, STREETS, junction, JUNCTION_RADIUS } from './road-network.ts';
 import { ROAD_POSTS } from './traffic-layout.ts';
 export { PARKING_LOT, PARKING_ENTRANCE, TEST_AREA, TEST_ENTRANCE, WORLD_BOUNDS, ROAD_WIDTH } from './road-network.ts';
 
 export interface Rect { x: number; z: number; width: number; depth: number }
-export interface House extends Rect { height: number; color: number; roofColor: number }
+export interface House extends Rect { height: number; color: number; roofColor: number; drivewayStreetId?: string }
 export interface Tree { x: number; z: number; size: number }
 export const PARK_PAVILION: House = { x: 0, z: 332, width: 22, depth: 14, height: 6, color: 0xd9cbb8, roofColor: 0x476a64 };
+export const MEWS_MARKET: House = { x: 178, z: 208, width: 22, depth: 14, height: 5.5, color: 0xd9cbb8, roofColor: 0x476a64, drivewayStreetId: 'mews-south' };
 
 // Lane geometry and physical pavement share the same street definitions.
 export const ROADS: readonly Rect[] = STREET_SURFACES;
@@ -53,7 +54,32 @@ for (const x of [-60, -32, 32, 60]) {
   HOUSES.push({ x, z: 270, width: 13, depth: 12, height: 6, color: colors[HOUSES.length % colors.length]!, roofColor: 0x696a62 });
 }
 HOUSES.push(PARK_PAVILION);
-export const DRIVEWAYS: readonly Rect[] = HOUSES.filter(house => Math.abs(house.x) < 100).map(house => {
+for (const z of [85, 155]) for (const x of [151, 184]) {
+  HOUSES.push({ x, z, width: 12, depth: 11, height: 5.5, color: colors[HOUSES.length % colors.length]!, roofColor: 0x696a62,
+    drivewayStreetId: z < 120 ? 'mews-north' : 'mews-south' });
+}
+HOUSES.push(MEWS_MARKET);
+
+/** An explicitly assigned street generates a perpendicular flush driveway from its paved width. */
+export function drivewayToStreet(house: House, streetId: string): Rect {
+  const street = STREETS.find(s => s.id === streetId);
+  if (!street) throw new Error(`Unknown driveway street: ${streetId}`);
+  const a = junction(street.from), b = junction(street.to);
+  const horizontal = a.z === b.z;
+  const axis = horizontal ? house.x + 3 : house.z + 3;
+  const low = Math.min(horizontal ? a.x : a.z, horizontal ? b.x : b.z) + JUNCTION_RADIUS + 2;
+  const high = Math.max(horizontal ? a.x : a.z, horizontal ? b.x : b.z) - JUNCTION_RADIUS - 2;
+  if (axis < low || axis > high) throw new Error('Driveway must remain clear of the junction');
+  const road = horizontal ? a.z : a.x, center = horizontal ? house.z : house.x;
+  const towardRoad = Math.sign(road - center);
+  const edge = center + towardRoad * (horizontal ? house.depth : house.width) / 2;
+  const end = road - towardRoad * street.width / 2;
+  if ((end - edge) * towardRoad <= 0) throw new Error('House must remain outside the street');
+  return horizontal ? { x: axis, z: (edge + end) / 2, width: 3.8, depth: Math.abs(end - edge) }
+    : { x: (edge + end) / 2, z: axis, width: Math.abs(end - edge), depth: 3.8 };
+}
+export const DRIVEWAYS: readonly Rect[] = HOUSES.filter(house => house.drivewayStreetId || Math.abs(house.x) < 100).map(house => {
+  if (house.drivewayStreetId) return drivewayToStreet(house, house.drivewayStreetId);
   const roadZ = house.z > 245 ? 300 : house.z > 150 ? 180 : house.z < 0 ? -60 : 60;
   const towardRoad = Math.sign(roadZ - house.z);
   const edge = house.z + towardRoad * house.depth / 2;
@@ -104,14 +130,18 @@ for (const x of [-113, -86, -15, 15, 86, 113]) {
 for (const x of [-82, -18, 18, 82]) TREES.push({ x, z: 203, size: 1 });
 for (const x of [-72, -42, 42, 72]) TREES.push({ x, z: 332, size: 1.2 });
 for (const x of [-60, -30, 30, 60]) TREES.push({ x, z: 236, size: 1.1 });
+for (const x of [155, 185]) for (const z of [106, 134]) TREES.push({ x, z, size: 0.95 });
+for (const z of [83, 156]) TREES.push({ x: 239, z, size: 1.1 });
 
 const boundaryCenterZ = (WORLD_BOUNDS.minZ + WORLD_BOUNDS.maxZ) / 2;
 const boundaryHalfDepth = (WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) / 2;
+const boundaryCenterX = (WORLD_BOUNDS.minX + WORLD_BOUNDS.maxX) / 2;
+const boundaryHalfWidth = (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX) / 2;
 export const BOUNDARY_OBSTACLES: readonly Obstacle[] = [
   { x: WORLD_BOUNDS.minX, z: boundaryCenterZ, halfWidth: 1, halfDepth: boundaryHalfDepth },
   { x: WORLD_BOUNDS.maxX, z: boundaryCenterZ, halfWidth: 1, halfDepth: boundaryHalfDepth },
-  { x: 0, z: WORLD_BOUNDS.minZ, halfWidth: WORLD_BOUNDS.maxX + 1, halfDepth: 1 },
-  { x: 0, z: WORLD_BOUNDS.maxZ, halfWidth: WORLD_BOUNDS.maxX + 1, halfDepth: 1 },
+  { x: boundaryCenterX, z: WORLD_BOUNDS.minZ, halfWidth: boundaryHalfWidth + 1, halfDepth: 1 },
+  { x: boundaryCenterX, z: WORLD_BOUNDS.maxZ, halfWidth: boundaryHalfWidth + 1, halfDepth: 1 },
 ];
 
 export const OBSTACLES: Obstacle[] = [

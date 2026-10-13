@@ -17,9 +17,10 @@ export const APPROACHES: readonly Approach[] = LANES.filter(l => l.to !== 'lot')
     : node.id === 'south' && lane.streetId === 'middle-s' ? 'stop'
     : node.id === 'west' && lane.streetId === 'town-w' ? 'stop'
     : node.id === 'east' && lane.streetId === 'town-e' ? 'yield'
-    : (node.id === 'sw' && lane.streetId === 'park-west') || (node.id === 'se' && lane.streetId === 'park-east') ? 'stop' : 'priority';
-  const x = node.x - lane.direction.x * STOP_DISTANCE - lane.direction.z * ROAD_WIDTH / 4;
-  const z = node.z - lane.direction.z * STOP_DISTANCE + lane.direction.x * ROAD_WIDTH / 4;
+    : (node.id === 'sw' && lane.streetId === 'park-west') || (node.id === 'se' && lane.streetId === 'park-east')
+      || (node.id === 'east' && lane.streetId === 'mews-north') || (node.id === 'se' && lane.streetId === 'mews-south') ? 'stop' : 'priority';
+  const x = node.x - lane.direction.x * STOP_DISTANCE - lane.direction.z * lane.width / 2;
+  const z = node.z - lane.direction.z * STOP_DISTANCE + lane.direction.x * lane.width / 2;
   const controlled = kind !== 'priority';
   return { id: lane.id, laneId: lane.id, junctionId: node.id, kind, x, z, direction: lane.direction,
     signalGroup: lane.direction.z ? 'ns' : 'ew',
@@ -28,6 +29,7 @@ export const APPROACHES: readonly Approach[] = LANES.filter(l => l.to !== 'lot')
 export interface SpeedZone { id: string; name: string; mph: number; areas: readonly RoadRect[] }
 export const SPEED_ZONES: readonly SpeedZone[] = [
   { id: 'practice', name: 'Practice area', mph: 10, areas: [PARKING_LOT, { ...PARKING_ENTRANCE, z: -78, depth: 4 }, TEST_AREA, TEST_ENTRANCE] },
+  { id: 'mews', name: 'Mews neighborhood', mph: 15, areas: [{ x: 203.5, z: 120, width: 147, depth: 236 }] },
   { id: 'park', name: 'Park neighborhood', mph: 15, areas: [{ x: 0, z: 305.5, width: 354, depth: 119 }] },
   { id: 'garden', name: 'Garden neighborhood', mph: 15, areas: [{ x: 0, z: 162, width: 300, depth: 168 }] },
   { id: 'town', name: 'Town neighborhood', mph: 25, areas: [{ x: (WORLD_BOUNDS.minX + WORLD_BOUNDS.maxX) / 2, z: (WORLD_BOUNDS.minZ + WORLD_BOUNDS.maxZ) / 2, width: WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX, depth: WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ }] },
@@ -40,7 +42,7 @@ export interface RoadSign extends Point {
   direction: Point; mph?: number; allWay?: boolean; approachId?: string;
 }
 function roadside(lane: Lane, point: Point, width = ROAD_WIDTH): Point {
-  const offset = width / 2 + 1.4 - ROAD_WIDTH / 4;
+  const offset = width / 2 + 1.4 - lane.width / 2;
   return { x: point.x - lane.direction.z * offset, z: point.z + lane.direction.x * offset };
 }
 export const ROAD_SIGNS: RoadSign[] = APPROACHES.filter(a => a.kind !== 'priority').map(a => {
@@ -69,6 +71,15 @@ for (const lane of LANES.filter(l => l.streetId.startsWith('park-'))) {
   const point = { x: lane.start.x + lane.direction.x * 8, z: lane.start.z + lane.direction.z * 8 };
   ROAD_SIGNS.push({ id: `speed-${lane.id}`, ...roadside(lane, point), kind: 'speed', direction: lane.direction, mph: 15 });
 }
+for (const lane of LANES.filter(l => l.streetId.startsWith('mews-'))) {
+  const s = STREETS.find(s => s.id === lane.streetId)!;
+  // Both connecting streets change neighborhood at x=130, clear of the junction apron.
+  const center = lane.streetId === 'mews-east'
+    ? { x: lane.start.x + lane.direction.x * 8, z: lane.start.z + lane.direction.z * 8 }
+    : { x: 130, z: lane.start.z };
+  const after = { x: center.x + lane.direction.x * 0.25, z: center.z + lane.direction.z * 0.25 };
+  ROAD_SIGNS.push({ id: `speed-${lane.id}`, ...roadside(lane, center, s.width), kind: 'speed', direction: lane.direction, mph: speedZoneAt(after)!.mph });
+}
 export interface SignalFixture extends Point { approachId: string; direction: Point; pole: Point }
 export const SIGNAL_FIXTURES: readonly SignalFixture[] = APPROACHES.filter(a => a.kind === 'signal').map(a => {
   const node = junction(a.junctionId), u = a.direction;
@@ -91,6 +102,7 @@ function approachSpawn(junctionId: string, streetId: string, lead: number) {
 }
 const parkingLane = LANES.find(l => l.streetId === 'east-s' && l.to === 'east')!;
 export const ROAD_EXAMPLES = {
+  mews: { x: 218, z: 130, heading: Math.PI },
   park: { x: -60, z: 302.5, heading: -Math.PI / 2 },
   signals: approachSpawn('center', 'middle-s', 36),
   stops: approachSpawn('north', 'middle-n', 32),

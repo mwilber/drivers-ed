@@ -497,6 +497,8 @@ function drawMap() {
   c.fillText('15 MPH', -50, 160);
   c.fillText('PARK · 15 MPH', 0, 245);
   c.fillText('PAVILION', 0, 352);
+  c.fillText('MEWS · 15 MPH', 176, 120);
+  c.fillText('MARKET', 178, 229);
   c.fillText('25 MPH', -50, 4);
   c.fillText('P', 107, 118);
   for (const vehicle of traffic.vehicles) {

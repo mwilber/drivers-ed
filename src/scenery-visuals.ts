@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { HOUSES, PARK_PAVILION, TREES } from './world-layout.ts';
+import { HOUSES, PARK_PAVILION, MEWS_MARKET, TREES } from './world-layout.ts';
 import type { Point } from './road-network.ts';
 
 /** Increment budgets, independent of device speed; all geometry is generated once. */
@@ -36,6 +36,7 @@ export function createSceneryVisuals(scene: THREE.Scene) {
       // Thin planes of trim extend at most 2 cm: no new physical projections.
       add(cube, 0xf1ead8, house, x, 1.35, face, 1.35, 2.7, 0.014, true);
       add(cube, 0x476a64, house, x, 1.27, face + side * 0.009, 1.12, 2.5, 0.004, true);
+      if (house === MEWS_MARKET && side === -1) continue; // Wider storefront windows below the fascia.
       for (const offset of [-w * 0.29, w * 0.29]) {
         add(cube, 0xf1ead8, house, x + offset, 3.2, face, 2.15, 1.9, 0.014, true);
         add(cube, 0x364b57, house, x + offset, 3.2, face + side * 0.009, 1.85, 1.6, 0.004, true);
@@ -53,6 +54,13 @@ export function createSceneryVisuals(scene: THREE.Scene) {
   // Recognizable striped pavilion fascia, inside the existing building footprint.
   for (const side of [-1, 1]) for (let i = -4; i <= 4; i++) {
     add(cube, i % 2 ? 0x476a64 : 0xf1ead8, PARK_PAVILION, i * 2.3, 5.45, PARK_PAVILION.z + side * 7.01, 2.3, 0.8, 0.02);
+  }
+  // A striped storefront identifies the market. All decoration stays on its solid building shell.
+  for (let i = -4; i <= 4; i++) add(cube, i % 2 ? 0x476a64 : 0xf1ead8, MEWS_MARKET,
+    MEWS_MARKET.x + i * 2.3, 4.4, MEWS_MARKET.z - 7.01, 2.3, 0.8, 0.02);
+  for (const side of [-1, 1]) {
+    add(cube, 0xf1ead8, MEWS_MARKET, MEWS_MARKET.x + side * 6.8, 2.1, MEWS_MARKET.z - 7.006, 5.7, 2.6, 0.014, true);
+    add(cube, 0x364b57, MEWS_MARKET, MEWS_MARKET.x + side * 6.8, 2.1, MEWS_MARKET.z - 7.015, 5.4, 2.3, 0.004, true);
   }
   const batches: Batch[] = [];
   for (const entry of pending.values()) {

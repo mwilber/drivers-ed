@@ -282,6 +282,18 @@ export class VehicleTraffic {
       const turnSpeed = cycling ? CYCLIST.turnSpeed : TRAFFIC_TUNING.turnSpeed;
       let target = Math.min(cycling ? CYCLIST.speed : 9, (speedZoneAt(car)?.mph ?? 25) * 0.44704);
       if (this.weather === 'rain') target *= RAIN.trafficSpeed;
+      // Read upcoming limits on this lane before entering a slower mid-block zone.
+      // A one-metre sampling margin plus the existing motor response allowance
+      // gives both lane-following and physical traffic time to brake smoothly.
+      const brakeMargin = car.physical ? this.weather === 'rain' ? 1.25 + Math.max(0, car.speed) * 0.55 : 0.4 + Math.max(0, car.speed) * 0.35 : 0.04;
+      if (!car.connectionId) {
+        const horizon = Math.min(laneLength(lane) - car.progress, Math.max(12, car.speed ** 2 / (2 * braking) + brakeMargin + 1));
+        for (let d = 1; d <= horizon; d++) {
+          const point = { x: lane.start.x + lane.direction.x * (car.progress + d), z: lane.start.z + lane.direction.z * (car.progress + d) };
+          const limit = Math.min(cycling ? CYCLIST.speed : 9, (speedZoneAt(point)?.mph ?? 25) * 0.44704) * (this.weather === 'rain' ? RAIN.trafficSpeed : 1);
+          target = Math.min(target, Math.sqrt(limit ** 2 + 2 * braking * Math.max(0, d - brakeMargin - 1)));
+        }
+      }
       if (car.recovering) target = Math.min(target, 2);
       let available = Infinity;
       car.reason = 'Cruising';
@@ -301,7 +313,6 @@ export class VehicleTraffic {
       // Wet motors have a lower combined force budget. Leave extra clearance
       // for physical lag around turns, so a stopped bumper cannot block the
       // pedestrian whose crossing request it is waiting to serve.
-      const brakeMargin = car.physical ? this.weather === 'rain' ? 1.25 + Math.max(0, car.speed) * 0.55 : 0.4 + Math.max(0, car.speed) * 0.35 : 0.04;
       target = Math.min(target, Math.sqrt(2 * braking * Math.max(0, available - brakeMargin)));
       if (Number.isFinite(obstacle)) target = Math.min(target, Math.max(0, (obstacle - TRAFFIC_TUNING.gap) / this.headway));
       const previous = car.physical ? car.driveSpeed : car.speed;
